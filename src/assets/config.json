@@ -1,3 +1,4 @@
 {
   "NG_APP_URL": "http://localhost:4200"
+   "NG_APP_ENV" :"local"
 }
