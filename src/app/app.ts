@@ -23,7 +23,7 @@ export class App implements OnInit {
     this.http.get('/assets/config.json').subscribe({
       next: (config: any) => {
         this.config = config;
-        this.apiUrl = this.config['NG_APP_URL'] || 'https://task.thingsrms.com/v1';
+        this.apiUrl = this.config['NG_APP_URL'] || 'https://dummyjson.com/products/2';
         console.log('✅ Loaded API URL:', this.apiUrl);
 
         // Step 2: Make API call using the runtime URL
