@@ -6,7 +6,7 @@ import { RouterOutlet } from '@angular/router';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, JsonPipe, HttpClientModule], // <-- include HttpClientModule here
+  imports: [RouterOutlet, JsonPipe, HttpClientModule],
   templateUrl: './app.html',
   styleUrls: ['./app.css']
 })
@@ -39,8 +39,19 @@ export class App implements OnInit {
       },
       error: (err) => {
         console.error('❌ Could not load config.json:', err);
-        // fallback in case config.json not found
-        this.apiUrl = 'https://task.thingsrms.com/v1';
+        // Fallback URL if config.json fails to load
+        this.apiUrl = 'https://dummyjson.com/products/2';
+        console.log('⚠️ Using fallback URL:', this.apiUrl);
+
+        this.http.get(this.apiUrl).subscribe({
+          next: (data) => {
+            this.data = data;
+            console.log('✅ API Response (fallback):', data);
+          },
+          error: (err) => {
+            console.error('❌ API Error (fallback):', err);
+          }
+        });
       }
     });
   }
