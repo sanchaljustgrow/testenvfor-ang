@@ -2,7 +2,7 @@ name: Angular Build and Release
 
 on:
   push:
-    branches: ["dev"]
+    branches: ["main"]
     tags:
       - 'v*'          # Trigger when you push a tag like v1.0.0
   #workflow_dispatch:   # Allow manual trigger from the Actions tab
