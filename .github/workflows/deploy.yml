@@ -1,6 +1,8 @@
 name: Deploy Angular Release to Nginx
 
 on:
+  push:
+    branches: main
   release:
     types: [published]
 
