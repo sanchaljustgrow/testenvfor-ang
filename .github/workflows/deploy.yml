@@ -14,49 +14,54 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # 1️⃣ Checkout repository
+      # 1️⃣ Checkout the repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Install dependencies
+      # 2️⃣ Install required dependencies
       - name: Install dependencies
         run: |
-          echo "Installing unzip and nginx..."
+          echo "Installing dependencies..."
           sudo apt update -y
           sudo apt install -y unzip nginx
           sudo systemctl enable nginx
           echo "✅ Dependencies installed."
 
       # 3️⃣ Download latest release asset
-      - name: Download latest Angular build
+      - name: Download latest release asset
         uses: robinraju/release-downloader@v1.11
         with:
           repository: ${{ github.repository }}
           latest: true
-          fileName: angular-build.zip   # Make sure this matches your release asset
+          fileName: angular-build.zip   # Must match release asset
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 4️⃣ Unzip the build
-      - name: Unzip Angular build
-        run: |
-          echo "📦 Unzipping angular-build.zip..."
-          unzip -o angular-build.zip -d ./angular-build
-          ls -l ./angular-build
-
-      # 5️⃣ Deploy to Nginx with correct permissions
+      # 4️⃣ Unzip and restructure build for Nginx
       - name: Deploy to Nginx
         run: |
-          echo "🚀 Deploying to /var/www/html/TestEnv..."
+          echo "Deploying Angular build to /var/www/html/TestEnv..."
           sudo mkdir -p /var/www/html/TestEnv
           sudo rm -rf /var/www/html/TestEnv/*
-          sudo cp -r ./angular-build/TestEnv/browser/* /var/www/html/TestEnv/
+
+          # Unzip into temporary folder
+          unzip -o angular-build.zip -d ./temp-unzip
+
+          # Move browser contents directly into TestEnv
+          sudo mv ./temp-unzip/TestEnv/browser/* /var/www/html/TestEnv/
+          sudo mv ./temp-unzip/TestEnv/prerendered-routes.json /var/www/html/TestEnv/ || true
+          sudo mv ./temp-unzip/TestEnv/3rdpartylicenses.txt /var/www/html/TestEnv/ || true
+
+          # Clean up temp folder
+          rm -rf ./temp-unzip
+
+          # Set proper permissions
           sudo chown -R www-data:www-data /var/www/html/TestEnv
           sudo chmod -R 755 /var/www/html/TestEnv
           echo "✅ Deployment complete."
 
-      # 6️⃣ Restart Nginx
+      # 5️⃣ Restart Nginx
       - name: Restart Nginx
         run: |
-          echo "🔄 Restarting Nginx..."
+          echo "Restarting Nginx..."
           sudo systemctl restart nginx
           sudo systemctl status nginx --no-pager
