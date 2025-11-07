@@ -1,8 +1,10 @@
 name: Deploy Angular Build to Nginx (Simple)
 
 on:
-  workflow_dispatch:
-  release:
+ push:
+   branches: main
+ workflow_dispatch:
+ release:
     types: [published]
 
 jobs:
