@@ -3,10 +3,10 @@ name: Deploy Angular Build to Local Nginx (Ubuntu)
 on:
   push:
     branches:
-      - main            # ✅ Correct syntax for branch trigger
-  workflow_dispatch:     # Allows manual trigger from the Actions tab
+      - main              # Trigger on push to main
+  workflow_dispatch:       # Allow manual trigger from Actions tab
   release:
-    types: [published]   # Triggers automatically when a new release is published
+    types: [published]     # Trigger automatically on new GitHub release
 
 jobs:
   deploy:
@@ -20,7 +20,7 @@ jobs:
         uses: dsaltares/fetch-gh-release-asset@v1
         with:
           repo: ${{ github.repository }}
-          file: build1.zip          # ⚠️ Update this if your release asset name is different
+          file: build1.zip            # ⚠️ Make sure this matches your actual release asset name
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract and Deploy
@@ -30,12 +30,13 @@ jobs:
           mkdir -p $DEPLOY_DIR
           rm -rf $DEPLOY_DIR/*
 
+          echo "📦 Moving and extracting build..."
           mv build1.zip $DEPLOY_DIR/
           cd $DEPLOY_DIR
           unzip -o build1.zip
           rm build1.zip
 
-          echo "✅ Build extracted successfully"
+          echo "✅ Build extracted successfully at $DEPLOY_DIR"
 
       - name: Install & Configure Nginx
         run: |
@@ -43,14 +44,15 @@ jobs:
           sudo apt update -y
           sudo apt install -y nginx unzip
 
-          # Clean existing Nginx html folder
+          echo "🧹 Cleaning existing Nginx html folder..."
           sudo rm -rf /var/www/html/*
 
-          # Copy new build files
+          echo "📁 Copying new build files to Nginx directory..."
           sudo cp -r ~/testenv-deploy/* /var/www/html/
 
-          # Restart Nginx service
+          echo "🔄 Restarting Nginx..."
           sudo systemctl restart nginx
           sudo systemctl enable nginx
 
-          echo "✅ Deployment complete! Visit: http://localhost or your machine IP"
+          echo "✅ Deployment complete!"
+          echo "🌍 Visit: http://localhost or http://$(hostname -I | awk '{print $1}')"
