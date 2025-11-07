@@ -1,11 +1,8 @@
-name: Deploy Angular Build to Nginx (Simple)
+name: Deploy Angular Release to Nginx
 
 on:
- push:
-   branches: main
- workflow_dispatch:
- release:
-    types: [published]
+  release:
+    types: [published]   # Trigger on new release
 
 jobs:
   deploy:
@@ -13,23 +10,23 @@ jobs:
     name: Deploy Angular Build
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
+      # 1️⃣ Install dependencies
       - name: Install dependencies
         run: |
           sudo apt update -y
           sudo apt install -y unzip nginx
           sudo systemctl enable nginx
 
-      - name: Download latest release asset
-        uses: robinraju/release-downloader@v1.11
+      # 2️⃣ Download release asset (Angular build ZIP)
+      - name: Download release asset
+        uses: actions/download-release-asset@v1
         with:
           repository: ${{ github.repository }}
-          latest: true
-          fileName: angular-build.zip
+          tag: ${{ github.event.release.tag_name }}
+          name: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # 3️⃣ Unzip into Nginx folder
       - name: Unzip build to Nginx
         run: |
           sudo mkdir -p /var/www/html/TestEnv
@@ -38,6 +35,7 @@ jobs:
           sudo chown -R www-data:www-data /var/www/html/TestEnv
           sudo chmod -R 755 /var/www/html/TestEnv
 
+      # 4️⃣ Configure SPA routing correctly
       - name: Configure SPA routing
         run: |
           NGINX_CONF="/etc/nginx/sites-available/default"
@@ -50,7 +48,7 @@ jobs:
               index index.html;
 
               location /TestEnv/ {
-                  root /var/www/html/TestEnv;
+                  alias /var/www/html/TestEnv/;
                   index index.html;
                   try_files \$uri /index.html;
               }
@@ -58,6 +56,7 @@ jobs:
           EOL
           sudo nginx -t
 
+      # 5️⃣ Restart Nginx
       - name: Restart Nginx
         run: |
           sudo systemctl restart nginx
