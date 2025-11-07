@@ -1,67 +1,56 @@
-name: Deploy Angular Release to Nginx
+name: Angular Auto Build and Release
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [massin]         
+  workflow_dispatch:       
 
 jobs:
-  deploy:
-    runs-on: self-hosted
-    name: Deploy Angular Build
+  determine-next-build:
+    runs-on: ubuntu-latest
+    outputs:
+      NEXT_TAG: ${{ steps.set-tag.outputs.next_tag }}
 
     steps:
-      # 1️⃣ Checkout repo (optional, needed only if you want repo files)
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Install dependencies
-      - name: Install dependencies
+      - name: Get latest build tag
+        id: set-tag
         run: |
-          sudo apt update -y
-          sudo apt install -y unzip nginx
-          sudo systemctl enable nginx
+          # Get the latest tag matching "build*" and sort numerically
+          LATEST_TAG=$(git tag --list 'build*' | sort -V | tail -n 1)
+          echo "Latest tag: $LATEST_TAG"
 
-      # 3️⃣ Download release asset
-      - name: Download release asset
-        uses: actions/download-release-asset@v1
+          # Extract number or default to 0
+          if [[ "$LATEST_TAG" == "" ]]; then
+            NEXT_NUMBER=1
+          else
+            NUMBER=${LATEST_TAG//build/}
+            NEXT_NUMBER=$((NUMBER+1))
+          fi
+
+          NEXT_TAG="build$NEXT_NUMBER"
+          echo "Next tag: $NEXT_TAG"
+
+          # Export as output for next job
+          echo "next_tag=$NEXT_TAG" >> $GITHUB_OUTPUT
+
+  build-and-release:
+    runs-on: ubuntu-latest
+    needs: determine-next-build
+    env:
+      BUILD_TAG: ${{ needs.determine-next-build.outputs.NEXT_TAG }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+
         with:
-          repository: ${{ github.repository }}
-          tag: ${{ github.event.release.tag_name }}
-          name: angular-build.zip
-          token: ${{ secrets.GITHUB_TOKEN }}
+          node-version: '20'
 
-      # 4️⃣ Unzip into Nginx
-      - name: Unzip build to Nginx
-        run: |
-          sudo mkdir -p /var/www/html/TestEnv
-          sudo rm -rf /var/www/html/TestEnv/*
-          sudo unzip -o angular-build.zip -d /var/www/html/TestEnv/
-          sudo chown -R www-data:www-data /var/www/html/TestEnv
-          sudo chmod -R 755 /var/www/html/TestEnv
 
-      # 5️⃣ Configure SPA routing
-      - name: Configure SPA routing
-        run: |
-          NGINX_CONF="/etc/nginx/sites-available/default"
-          sudo tee $NGINX_CONF > /dev/null <<EOL
-          server {
-              listen 80 default_server;
-              listen [::]:80 default_server;
 
-              root /var/www/html;
-              index index.html;
-
-              location /TestEnv/ {
-                  alias /var/www/html/TestEnv/;
-                  index index.html;
-                  try_files \$uri /index.html;
-              }
-          }
-          EOL
-          sudo nginx -t
-
-      # 6️⃣ Restart Nginx
-      - name: Restart Nginx
-        run: |
-          sudo systemctl restart nginx
-          sudo systemctl status nginx --no-pager
