@@ -1,61 +1,40 @@
-name: Deploy Angular Build to Local Nginx (Ubuntu)
+name: Download and Unzip Angular Build
 
 on:
   push:
-    branches:
-      - main
+      branches:
+        - main
   workflow_dispatch:
   release:
-    types: [published]
-
+      types: [published]
 jobs:
-  deploy:
-    name: Deploy Angular build to Nginx
+  unzip-build:
     runs-on: self-hosted
 
     steps:
+      # 1️⃣ Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Install dependencies
-      - name: Install dependencies
-        run: |
-          echo "Installing dependencies..."
-          sudo apt update -y
-          sudo apt install -y unzip nginx
-          sudo systemctl enable nginx
-          echo "✅ Dependencies installed."
-
-      # Download latest release asset
-      - name: Download latest release asset
+      # 2️⃣ Download latest release asset
+      - name: Download latest Angular build
         uses: robinraju/release-downloader@v1.11
         with:
           repository: ${{ github.repository }}
           latest: true
-          fileName: angular-build.zip
+          fileName: angular-build.zip  # make sure this matches your release asset
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Unzip the build
-      - name: Unzip build
+      # 3️⃣ Install unzip (if not installed)
+      - name: Install unzip
         run: |
-          echo "Unzipping angular-build.zip..."
+          sudo apt update -y
+          sudo apt install -y unzip
+
+      # 4️⃣ Unzip the build
+      - name: Unzip Angular build
+        run: |
+          echo "📦 Unzipping angular-build.zip..."
           unzip -o angular-build.zip -d ./angular-build
+          echo "✅ Angular build unzipped to ./angular-build"
           ls -l ./angular-build
-
-      # Deploy to Nginx with correct permissions
-      - name: Deploy to Nginx
-        run: |
-          echo "Deploying build to /var/www/html/TestEnv..."
-          sudo mkdir -p /var/www/html/TestEnv
-          sudo rm -rf /var/www/html/TestEnv/*
-          sudo cp -r ./angular-build/* /var/www/html/TestEnv/
-          sudo chown -R www-data:www-data /var/www/html/TestEnv
-          sudo chmod -R 755 /var/www/html/TestEnv
-          echo "✅ Deployment complete."
-
-      # Restart Nginx
-      - name: Restart Nginx
-        run: |
-          echo "Restarting Nginx..."
-          sudo systemctl restart nginx
-          sudo systemctl status nginx --no-pager
