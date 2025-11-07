@@ -2,6 +2,10 @@ name: Download Latest Angular Release
 
 on:
   workflow_dispatch:  # manual trigger
+  push:
+    branches:
+      - main
+
 
 jobs:
   download-latest-release:
