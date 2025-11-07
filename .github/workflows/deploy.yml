@@ -6,7 +6,7 @@ on:
         - main
   workflow_dispatch:
   release:
-      types: [published]
+      types: [published] 
 jobs:
   unzip-build:
     runs-on: self-hosted
