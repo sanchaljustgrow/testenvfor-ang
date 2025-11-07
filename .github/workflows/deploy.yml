@@ -1,7 +1,7 @@
 name: Deploy Angular Build to Local Nginx (Ubuntu)
 
 on:
-  push: 
+  push:
     branches:
       - main              # Trigger on push to main
   workflow_dispatch:       # Allow manual trigger from Actions tab
@@ -17,10 +17,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download latest release asset
-        uses: dsaltares/fetch-gh-release-asset@v1
+        uses: robinraju/release-downloader@v1.11
         with:
-          repo: ${{ github.repository }}
-          file: build1.zip            # ⚠️ Make sure this matches your actual release asset name
+          repository: ${{ github.repository }}
+          latest: true
+          fileName: build1.zip          # ⚠️ Must match your uploaded release asset name
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract and Deploy
@@ -35,7 +36,6 @@ jobs:
           cd $DEPLOY_DIR
           unzip -o build1.zip
           rm build1.zip
-
           echo "✅ Build extracted successfully at $DEPLOY_DIR"
 
       - name: Install & Configure Nginx
