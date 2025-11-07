@@ -1,36 +1,62 @@
-name: Deploy Unzip Project
+name: Deploy Angular Build to Nginx (Simple)
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+  release:
+    types: [published]
 
 jobs:
-  unzip-and-deploy:
-    runs-on: ubuntu-latest
+  deploy:
+    runs-on: self-hosted
+    name: Deploy Angular Build
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Node.js (if Angular build needed)
-      uses: actions/setup-node@v3
-      with:
-        node-version: '20'
+      - name: Install dependencies
+        run: |
+          sudo apt update -y
+          sudo apt install -y unzip nginx
+          sudo systemctl enable nginx
 
-    - name: Unzip project
-      run: |
-        echo "Unzipping project files..."
-        unzip -o path/to/yourfile.zip -d ./unzipped_project
-        ls -la ./unzipped_project
+      - name: Download latest release asset
+        uses: robinraju/release-downloader@v1.11
+        with:
+          repository: ${{ github.repository }}
+          latest: true
+          fileName: angular-build.zip
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Install dependencies (if Angular project)
-      run: |
-        cd ./unzipped_project
-        npm install
+      - name: Unzip build to Nginx
+        run: |
+          sudo mkdir -p /var/www/html/TestEnv
+          sudo rm -rf /var/www/html/TestEnv/*
+          sudo unzip -o angular-build.zip -d /var/www/html/TestEnv/
+          sudo chown -R www-data:www-data /var/www/html/TestEnv
+          sudo chmod -R 755 /var/www/html/TestEnv
 
-    - name: Build Angular project
-      run: |
-        cd ./unzipped_project
-        npm run build
+      - name: Configure SPA routing
+        run: |
+          NGINX_CONF="/etc/nginx/sites-available/default"
+          sudo tee $NGINX_CONF > /dev/null <<EOL
+          server {
+              listen 80 default_server;
+              listen [::]:80 default_server;
+
+              root /var/www/html;
+              index index.html;
+
+              location /TestEnv/ {
+                  root /var/www/html/TestEnv;
+                  index index.html;
+                  try_files \$uri /index.html;
+              }
+          }
+          EOL
+          sudo nginx -t
+
+      - name: Restart Nginx
+        run: |
+          sudo systemctl restart nginx
+          sudo systemctl status nginx --no-pager
