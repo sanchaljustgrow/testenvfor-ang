@@ -14,19 +14,20 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Install dependencies
+      # 2️⃣ Install dependencies (unzip + nginx)
       - name: Install dependencies
         run: |
-          echo "Installing unzip and nginx..."
+          echo "Installing dependencies..."
           sudo apt update -y
           sudo apt install -y unzip nginx
           sudo systemctl enable nginx
           echo "✅ Dependencies installed."
 
-      # Download latest release asset
+      # 3️⃣ Download latest release asset
       - name: Download latest release asset
         uses: robinraju/release-downloader@v1.11
         with:
@@ -35,24 +36,25 @@ jobs:
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Unzip the build
+      # 4️⃣ Unzip the build
       - name: Unzip build
         run: |
-          echo "Unzipping angular-build.zip..."
+          echo "📦 Unzipping angular-build.zip..."
           unzip -o angular-build.zip -d ./angular-build
           ls -l ./angular-build
 
-      # Deploy directly to Nginx root
+      # 5️⃣ Deploy browser folder to Nginx
       - name: Deploy to Nginx
         run: |
-          echo "Deploying build to /var/www/html..."
-          sudo rm -rf /var/www/html/*
-          sudo cp -r ./angular-build/TestEnv/* /var/www/html/
-          sudo chown -R www-data:www-data /var/www/html
-          sudo chmod -R 755 /var/www/html
+          echo "Deploying build to /var/www/html/TestEnv..."
+          sudo mkdir -p /var/www/html/TestEnv
+          sudo rm -rf /var/www/html/TestEnv/*
+          sudo cp -r ./angular-build/TestEnv/browser/* /var/www/html/TestEnv/
+          sudo chown -R www-data:www-data /var/www/html/TestEnv
+          sudo chmod -R 755 /var/www/html/TestEnv
           echo "✅ Deployment complete."
 
-      # Restart Nginx
+      # 6️⃣ Restart Nginx
       - name: Restart Nginx
         run: |
           echo "Restarting Nginx..."
