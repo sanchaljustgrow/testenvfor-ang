@@ -1,45 +1,30 @@
-name: Deploy Angular Release to Nginx
+name: Download Release ZIP
 
+# Trigger manually or on push
 on:
- 
-  release:
-    types: [published]  # Trigger when a release is published
+  workflow_dispatch:  # allows manual trigger
+  push:
+    branches:
+      - main
 
 jobs:
-  deploy:
-    runs-on: self-hosted
-    name: Deploy Angular Build
-
+  download-release:
+    runs-on: ubuntu-latest
     steps:
-      # 1️⃣ Install dependencies
-      - name: Install dependencies
-        run: |
-          sudo apt update -y
-          sudo apt install -y unzip nginx jq
-          sudo systemctl enable nginx
+      # 1️⃣ Checkout repo (optional if you need it)
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      # 2️⃣ Get download URL of angular-build.zip from release
-      - name: Get release asset URL
-        id: get_asset
-        run: |
-          ASSET_NAME="angular-build.zip"
-          REPO="${{ github.repository }}"
-          TAG="${{ github.event.release.tag_name }}"
-          API_URL="https://api.github.com/repos/$REPO/releases/tags/$TAG"
+      # 2️⃣ Download the release ZIP
+      - name: Download release ZIP
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          repository: "<owner>/<repo>"   # e.g., sanchaljustgrow/angulartestenv
+          tag: "v1.0.0"                 # release tag
+          asset_name: "project.zip"      # name of zip in Assets
+          download_path: "./release_zip" # where to save it
 
-          ASSET_URL=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" $API_URL \
-            | jq -r ".assets[] | select(.name==\"$ASSET_NAME\") | .url")
-
-          if [ -z "$ASSET_URL" ]; then
-            echo "Error: Asset not found"
-            exit 1
-          fi
-
-          echo "ASSET_URL=$ASSET_URL" >> $GITHUB_ENV
-
-      # 3️⃣ Download the asset
-      - name: Download angular-build.zip
-        run: |
-          curl -L -H "Accept: application/octet-stream" \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            $ASSET_URL -o angular-build.zip
+      # 3️⃣ Unzip the file
+      - name: Unzip downloaded release
+        run: unzip ./release_zip/project.zip -d ./release_contents
