@@ -9,7 +9,7 @@ on:
 
 jobs:
   download-latest-release:
-    runs-on: ubuntu-latest
+    runs-on:  self-hosted 
     steps:
       # 1️⃣ Checkout repository (optional)
       - name: Checkout repository
