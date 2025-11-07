@@ -11,20 +11,11 @@ jobs:
   download-release:
     runs-on: ubuntu-latest
     steps:
-      # 1️⃣ Checkout (optional if you just need the ZIP)
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Download angular-build.zip
+        run: |
+          curl -L -o angular-build.zip \
+          -H "Accept: application/octet-stream" \
+          https://github.com/sanchaljustgrow/testenvfor-ang/releases/download/build1/angular-build.zip
 
-      # 2️⃣ Download the release ZIP from GitHub
-      - name: Download build1 release ZIP
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          repository: sanchaljustgrow/testenvfor-ang
-          tag: build1
-          asset_name: angular-build.zip
-          download_path: ./release_zip
-
-      # 3️⃣ Unzip the downloaded file
       - name: Unzip Angular Build
-        run: unzip ./release_zip/angular-build.zip -d ./release_contents
+        run: unzip angular-build.zip -d ./release_contents
