@@ -54,7 +54,21 @@ jobs:
           sudo chmod -R 755 /var/www/html/TestEnv
           echo "✅ Deployment complete."
 
-      # 6️⃣ Restart Nginx
+      # 6️⃣ Configure Nginx for Angular SPA routing
+      - name: Configure Nginx for SPA
+        run: |
+          echo "Configuring Nginx for Angular SPA..."
+          NGINX_CONF="/etc/nginx/sites-available/default"
+          sudo sed -i '/location \/ {/a \
+          location /TestEnv/ { \
+              root /var/www/html; \
+              index index.html; \
+              try_files $uri /TestEnv/index.html; \
+          }' $NGINX_CONF
+          sudo nginx -t
+          echo "✅ Nginx configured."
+
+      # 7️⃣ Restart Nginx
       - name: Restart Nginx
         run: |
           echo "Restarting Nginx..."
