@@ -1,21 +1,40 @@
-name: Download Release ZIP
+name: Download Latest Angular Release
 
-# Trigger manually or on push
 on:
-  workflow_dispatch:  # allows manual trigger
-  push:
-    branches:
-      - main
+  workflow_dispatch:  # manual trigger
 
 jobs:
-  download-release:
+  download-latest-release:
     runs-on: ubuntu-latest
     steps:
-      - name: Download angular-build.zip
+      # 1️⃣ Checkout repository (optional)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ Install dependencies
+      - name: Ensure unzip & curl are installed
+        run: sudo apt-get update && sudo apt-get install -y unzip curl jq
+
+      # 3️⃣ Get the latest release tag using GitHub API
+      - name: Get latest release tag
+        id: get_latest
         run: |
+          LATEST_TAG=$(curl -s https://api.github.com/repos/sanchaljustgrow/testenvfor-ang/releases/latest | jq -r .tag_name)
+          echo "Latest release tag is: $LATEST_TAG"
+          echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
+
+      # 4️⃣ Download the latest release ZIP
+      - name: Download latest release ZIP
+        run: |
+          echo "Downloading angular-build.zip from release $LATEST_TAG"
           curl -L -o angular-build.zip \
           -H "Accept: application/octet-stream" \
-          https://github.com/sanchaljustgrow/testenvfor-ang/releases/download/build1/angular-build.zip
+          https://github.com/sanchaljustgrow/testenvfor-ang/releases/download/$LATEST_TAG/angular-build.zip
 
+      # 5️⃣ Unzip the downloaded file
       - name: Unzip Angular Build
-        run: unzip angular-build.zip -d ./release_contents
+        run: unzip -o angular-build.zip -d ./release_contents
+
+      # 6️⃣ List contents
+      - name: List contents
+        run: ls -R ./release_contents
