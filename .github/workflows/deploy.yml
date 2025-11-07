@@ -1,80 +1,36 @@
-name: Deploy Angular Build to Local Nginx (Ubuntu)
+name: Deploy Unzip Project
 
 on:
   push:
     branches:
       - main
   workflow_dispatch:
-  release:
-    types: [published]
 
 jobs:
-  deploy:
-    name: Deploy Angular build to Nginx
-    runs-on: self-hosted
+  unzip-and-deploy:
+    runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repository
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-      # 2️⃣ Install dependencies (unzip + nginx)
-      - name: Install dependencies
-        run: |
-          echo "Installing dependencies..."
-          sudo apt update -y
-          sudo apt install -y unzip nginx
-          sudo systemctl enable nginx
-          echo "✅ Dependencies installed."
+    - name: Set up Node.js (if Angular build needed)
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
 
-      # 3️⃣ Download latest release asset
-      - name: Download latest release asset
-        uses: robinraju/release-downloader@v1.11
-        with:
-          repository: ${{ github.repository }}
-          latest: true
-          fileName: angular-build.zip
-          token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Unzip project
+      run: |
+        echo "Unzipping project files..."
+        unzip -o path/to/yourfile.zip -d ./unzipped_project
+        ls -la ./unzipped_project
 
-      # 4️⃣ Unzip the build
-      - name: Unzip build
-        run: |
-          echo "📦 Unzipping angular-build.zip..."
-          unzip -o angular-build.zip -d ./angular-build
-          ls -l ./angular-build
+    - name: Install dependencies (if Angular project)
+      run: |
+        cd ./unzipped_project
+        npm install
 
-      # 5️⃣ Deploy browser folder to Nginx
-      - name: Deploy to Nginx
-        run: |
-          echo "Deploying build to /var/www/html/TestEnv..."
-          sudo mkdir -p /var/www/html/TestEnv
-          sudo rm -rf /var/www/html/TestEnv/*
-          sudo cp -r ./angular-build/TestEnv/browser/* /var/www/html/TestEnv/
-          sudo chown -R www-data:www-data /var/www/html/TestEnv
-          sudo chmod -R 755 /var/www/html/TestEnv
-          echo "✅ Deployment complete."
-
-      # 6️⃣ Configure Nginx for Angular SPA (safe, idempotent)
-      - name: Configure Nginx for SPA
-        run: |
-          echo "Configuring Nginx for Angular SPA..."
-          NGINX_CONF="/etc/nginx/sites-available/default"
-          # Remove existing TestEnv location block if exists
-          sudo sed -i '/location \/TestEnv\//,/}/d' $NGINX_CONF
-          # Add the correct block
-          sudo bash -c "cat >> $NGINX_CONF <<EOF
-location /TestEnv/ {
-    root /var/www/html;
-    index index.html;
-    try_files \$uri /TestEnv/index.html;
-}
-EOF"
-          sudo nginx -t
-          echo "✅ Nginx configured."
-
-      # 7️⃣ Restart Nginx
-      - name: Restart Nginx
-        run: |
-          echo "Restarting Nginx..."
-          sudo systemctl restart nginx
-          sudo systemctl status nginx --no-pager
+    - name: Build Angular project
+      run: |
+        cd ./unzipped_project
+        npm run build
