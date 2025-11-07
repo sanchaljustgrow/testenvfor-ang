@@ -2,7 +2,7 @@ name: Angular Auto Build and Release
 
 on:
   push:
-    branches: [main]         
+    branches: [massin]         
   workflow_dispatch:       
 
 jobs:
