@@ -3,10 +3,10 @@ name: Deploy Angular Build to Local Nginx (Ubuntu)
 on:
   push:
     branches:
-      - main              # Trigger on push to main
-  workflow_dispatch:       # Allow manual trigger from Actions tab
+      - main
+  workflow_dispatch:
   release:
-    types: [published]     # Trigger automatically on new GitHub release
+    types: [published]
 
 jobs:
   deploy:
@@ -21,38 +21,5 @@ jobs:
         with:
           repository: ${{ github.repository }}
           latest: true
-          fileName: build1.zip          # ⚠️ Must match your uploaded release asset name
+          fileName: angular-build.zip     # ✅ match your real asset name
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract and Deploy
-        run: |
-          echo "🚀 Starting deployment..."
-          DEPLOY_DIR=~/testenv-deploy
-          mkdir -p $DEPLOY_DIR
-          rm -rf $DEPLOY_DIR/*
-
-          echo "📦 Moving and extracting build..."
-          mv build1.zip $DEPLOY_DIR/
-          cd $DEPLOY_DIR
-          unzip -o build1.zip
-          rm build1.zip
-          echo "✅ Build extracted successfully at $DEPLOY_DIR"
-
-      - name: Install & Configure Nginx
-        run: |
-          echo "🌐 Setting up Nginx..."
-          sudo apt update -y
-          sudo apt install -y nginx unzip
-
-          echo "🧹 Cleaning existing Nginx html folder..."
-          sudo rm -rf /var/www/html/*
-
-          echo "📁 Copying new build files to Nginx directory..."
-          sudo cp -r ~/testenv-deploy/* /var/www/html/
-
-          echo "🔄 Restarting Nginx..."
-          sudo systemctl restart nginx
-          sudo systemctl enable nginx
-
-          echo "✅ Deployment complete!"
-          echo "🌍 Visit: http://localhost or http://$(hostname -I | awk '{print $1}')"
