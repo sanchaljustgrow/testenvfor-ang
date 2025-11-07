@@ -2,9 +2,10 @@ name: Deploy Angular Release to Nginx
 
 on:
   push:
-    branches: main
+   branches: main
   release:
-    types: [published]
+    types: [published]  # Only run on new release
+  workflow_dispatch:     # Optional manual trigger
 
 jobs:
   deploy:
@@ -18,29 +19,50 @@ jobs:
           sudo apt install -y unzip nginx jq
           sudo systemctl enable nginx
 
-      # 1️⃣ Get release asset download URL
+      # 1️⃣ Determine release tag (supports manual workflow_dispatch)
+      - name: Set release tag
+        id: set_tag
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            # fallback for manual trigger
+            TAG="${{ github.event.inputs.release_tag }}"
+          fi
+
+          if [ -z "$TAG" ]; then
+            echo "Error: Release tag not set"
+            exit 1
+          fi
+
+          echo "TAG=$TAG" >> $GITHUB_ENV
+
+      # 2️⃣ Get release asset download URL
       - name: Get release asset URL
         id: get_asset
         run: |
           ASSET_NAME="angular-build.zip"
           REPO="${{ github.repository }}"
-          TAG="${{ github.event.release.tag_name }}"
           API_URL="https://api.github.com/repos/$REPO/releases/tags/$TAG"
 
-          # Get the download URL using GitHub API
           ASSET_URL=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" $API_URL \
             | jq -r ".assets[] | select(.name==\"$ASSET_NAME\") | .url")
 
+          if [ -z "$ASSET_URL" ]; then
+            echo "Error: Asset not found"
+            exit 1
+          fi
+
           echo "ASSET_URL=$ASSET_URL" >> $GITHUB_ENV
 
-      # 2️⃣ Download release asset
+      # 3️⃣ Download release asset
       - name: Download release asset
         run: |
           curl -L -H "Accept: application/octet-stream" \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             $ASSET_URL -o angular-build.zip
 
-      # 3️⃣ Unzip into Nginx folder
+      # 4️⃣ Unzip into Nginx folder
       - name: Unzip build to Nginx
         run: |
           sudo mkdir -p /var/www/html/TestEnv
@@ -49,7 +71,7 @@ jobs:
           sudo chown -R www-data:www-data /var/www/html/TestEnv
           sudo chmod -R 755 /var/www/html/TestEnv
 
-      # 4️⃣ Configure SPA routing
+      # 5️⃣ Configure SPA routing
       - name: Configure SPA routing
         run: |
           NGINX_CONF="/etc/nginx/sites-available/default"
@@ -70,7 +92,7 @@ jobs:
           EOL
           sudo nginx -t
 
-      # 5️⃣ Restart Nginx
+      # 6️⃣ Restart Nginx
       - name: Restart Nginx
         run: |
           sudo systemctl restart nginx
