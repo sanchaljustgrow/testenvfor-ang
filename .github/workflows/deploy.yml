@@ -17,15 +17,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 🧩 Install required dependencies (unzip + nginx)
+      # Install dependencies
       - name: Install dependencies
         run: |
           echo "Installing dependencies..."
           sudo apt update -y
           sudo apt install -y unzip nginx
           sudo systemctl enable nginx
-          echo "✅ Dependencies installed successfully."
+          echo "✅ Dependencies installed."
 
+      # Download latest release asset
       - name: Download latest release asset
         uses: robinraju/release-downloader@v1.11
         with:
@@ -34,21 +35,25 @@ jobs:
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Unzip the build
       - name: Unzip build
         run: |
           echo "Unzipping angular-build.zip..."
           unzip -o angular-build.zip -d ./angular-build
           ls -l ./angular-build
 
+      # Deploy to Nginx with correct permissions
       - name: Deploy to Nginx
         run: |
-          echo "Deploying build to /var/www/html..."
-          sudo rm -rf /var/www/html/*
-          sudo cp -r ./angular-build/* /var/www/html/
-          sudo chown -R www-data:www-data /var/www/html
-          sudo chmod -R 755 /var/www/html
+          echo "Deploying build to /var/www/html/TestEnv..."
+          sudo mkdir -p /var/www/html/TestEnv
+          sudo rm -rf /var/www/html/TestEnv/*
+          sudo cp -r ./angular-build/* /var/www/html/TestEnv/
+          sudo chown -R www-data:www-data /var/www/html/TestEnv
+          sudo chmod -R 755 /var/www/html/TestEnv
           echo "✅ Deployment complete."
 
+      # Restart Nginx
       - name: Restart Nginx
         run: |
           echo "Restarting Nginx..."
