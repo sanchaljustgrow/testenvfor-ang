@@ -1,87 +1,67 @@
-name: Angular Auto Build and Release
+name: Deploy Angular Release to Nginx
 
 on:
-  push:
-    branches: [massin]         
-  workflow_dispatch:       
+  release:
+    types: [published]
 
 jobs:
-  determine-next-build:
-    runs-on: ubuntu-latest
-    outputs:
-      NEXT_TAG: ${{ steps.set-tag.outputs.next_tag }}
+  deploy:
+    runs-on: self-hosted
+    name: Deploy Angular Build
 
     steps:
+      # 1️⃣ Checkout repo (optional, needed only if you want repo files)
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Get latest build tag
-        id: set-tag
-        run: |
-          # Get the latest tag matching "build*" and sort numerically
-          LATEST_TAG=$(git tag --list 'build*' | sort -V | tail -n 1)
-          echo "Latest tag: $LATEST_TAG"
-
-          # Extract number or default to 0
-          if [[ "$LATEST_TAG" == "" ]]; then
-            NEXT_NUMBER=1
-          else
-            NUMBER=${LATEST_TAG//build/}
-            NEXT_NUMBER=$((NUMBER+1))
-          fi
-
-          NEXT_TAG="build$NEXT_NUMBER"
-          echo "Next tag: $NEXT_TAG"
-
-          # Export as output for next job
-          echo "next_tag=$NEXT_TAG" >> $GITHUB_OUTPUT
-
-  build-and-release:
-    runs-on: ubuntu-latest
-    needs: determine-next-build
-    env:
-      BUILD_TAG: ${{ needs.determine-next-build.outputs.NEXT_TAG }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
+      # 2️⃣ Install dependencies
       - name: Install dependencies
-        run: npm install
-
-      - name: Build Angular project
-        run: npm run build --if-present
-
-      - name: Create build archive
         run: |
-          cd dist
-          zip -r ../angular-build.zip .
-          cd ..
+          sudo apt update -y
+          sudo apt install -y unzip nginx
+          sudo systemctl enable nginx
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+      # 3️⃣ Download release asset
+      - name: Download release asset
+        uses: actions/download-release-asset@v1
         with:
-          name: angular-build
-          path: angular-build.zip
+          repository: ${{ github.repository }}
+          tag: ${{ github.event.release.tag_name }}
+          name: angular-build.zip
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create Git tag for next build
+      # 4️⃣ Unzip into Nginx
+      - name: Unzip build to Nginx
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git tag $BUILD_TAG
-          git push origin $BUILD_TAG
+          sudo mkdir -p /var/www/html/TestEnv
+          sudo rm -rf /var/www/html/TestEnv/*
+          sudo unzip -o angular-build.zip -d /var/www/html/TestEnv/
+          sudo chown -R www-data:www-data /var/www/html/TestEnv
+          sudo chmod -R 755 /var/www/html/TestEnv
 
-      - name: Create or Update GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.BUILD_TAG }}
-          name: Release ${{ env.BUILD_TAG }}
-          body: "🚀 Angular build for **${{ env.BUILD_TAG }}**"
-          files: angular-build.zip
-          overwrite_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # 5️⃣ Configure SPA routing
+      - name: Configure SPA routing
+        run: |
+          NGINX_CONF="/etc/nginx/sites-available/default"
+          sudo tee $NGINX_CONF > /dev/null <<EOL
+          server {
+              listen 80 default_server;
+              listen [::]:80 default_server;
+
+              root /var/www/html;
+              index index.html;
+
+              location /TestEnv/ {
+                  alias /var/www/html/TestEnv/;
+                  index index.html;
+                  try_files \$uri /index.html;
+              }
+          }
+          EOL
+          sudo nginx -t
+
+      # 6️⃣ Restart Nginx
+      - name: Restart Nginx
+        run: |
+          sudo systemctl restart nginx
+          sudo systemctl status nginx --no-pager
