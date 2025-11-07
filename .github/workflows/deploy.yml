@@ -14,52 +14,45 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # 1️⃣ Checkout the repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Install required dependencies
+      # Install dependencies
       - name: Install dependencies
         run: |
-          echo "Installing dependencies..."
+          echo "Installing unzip and nginx..."
           sudo apt update -y
           sudo apt install -y unzip nginx
           sudo systemctl enable nginx
           echo "✅ Dependencies installed."
 
-      # 3️⃣ Download latest release asset
+      # Download latest release asset
       - name: Download latest release asset
         uses: robinraju/release-downloader@v1.11
         with:
           repository: ${{ github.repository }}
           latest: true
-          fileName: angular-build.zip   # Must match release asset
+          fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 4️⃣ Unzip and restructure build for Nginx
+      # Unzip the build
+      - name: Unzip build
+        run: |
+          echo "Unzipping angular-build.zip..."
+          unzip -o angular-build.zip -d ./angular-build
+          ls -l ./angular-build
+
+      # Deploy directly to Nginx root
       - name: Deploy to Nginx
         run: |
-          echo "Deploying Angular build to /var/www/html/TestEnv..."
-          sudo mkdir -p /var/www/html/TestEnv
-          sudo rm -rf /var/www/html/TestEnv/*
-
-          # Unzip into temporary folder
-          unzip -o angular-build.zip -d ./temp-unzip
-
-          # Move browser contents directly into TestEnv
-          sudo mv ./temp-unzip/TestEnv/browser/* /var/www/html/TestEnv/
-          sudo mv ./temp-unzip/TestEnv/prerendered-routes.json /var/www/html/TestEnv/ || true
-          sudo mv ./temp-unzip/TestEnv/3rdpartylicenses.txt /var/www/html/TestEnv/ || true
-
-          # Clean up temp folder
-          rm -rf ./temp-unzip
-
-          # Set proper permissions
-          sudo chown -R www-data:www-data /var/www/html/TestEnv
-          sudo chmod -R 755 /var/www/html/TestEnv
+          echo "Deploying build to /var/www/html..."
+          sudo rm -rf /var/www/html/*
+          sudo cp -r ./angular-build/TestEnv/* /var/www/html/
+          sudo chown -R www-data:www-data /var/www/html
+          sudo chmod -R 755 /var/www/html
           echo "✅ Deployment complete."
 
-      # 5️⃣ Restart Nginx
+      # Restart Nginx
       - name: Restart Nginx
         run: |
           echo "Restarting Nginx..."
