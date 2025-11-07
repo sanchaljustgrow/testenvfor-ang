@@ -1,7 +1,9 @@
 name: Deploy Angular Release to Nginx
 
 on:
-  release:
+ push:
+    branches: main
+ release:
     types: [published]   # Trigger on new release
 
 jobs:
