@@ -1,10 +1,8 @@
 name: Deploy Angular Release to Nginx
 
 on:
- push:
-    branches: main
- release:
-    types: [published]   # Trigger on new release
+  release:
+    types: [published]
 
 jobs:
   deploy:
@@ -12,21 +10,33 @@ jobs:
     name: Deploy Angular Build
 
     steps:
-      # 1️⃣ Install dependencies
       - name: Install dependencies
         run: |
           sudo apt update -y
-          sudo apt install -y unzip nginx
+          sudo apt install -y unzip nginx jq
           sudo systemctl enable nginx
 
-      # 2️⃣ Download release asset (Angular build ZIP)
+      # 1️⃣ Get release asset download URL
+      - name: Get release asset URL
+        id: get_asset
+        run: |
+          ASSET_NAME="angular-build.zip"
+          REPO="${{ github.repository }}"
+          TAG="${{ github.event.release.tag_name }}"
+          API_URL="https://api.github.com/repos/$REPO/releases/tags/$TAG"
+
+          # Get the download URL using GitHub API
+          ASSET_URL=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" $API_URL \
+            | jq -r ".assets[] | select(.name==\"$ASSET_NAME\") | .url")
+
+          echo "ASSET_URL=$ASSET_URL" >> $GITHUB_ENV
+
+      # 2️⃣ Download release asset
       - name: Download release asset
-        uses: actions/download-release-asset@v1
-        with:
-          repository: ${{ github.repository }}
-          tag: ${{ github.event.release.tag_name }}
-          name: angular-build.zip
-          token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -L -H "Accept: application/octet-stream" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            $ASSET_URL -o angular-build.zip
 
       # 3️⃣ Unzip into Nginx folder
       - name: Unzip build to Nginx
@@ -37,7 +47,7 @@ jobs:
           sudo chown -R www-data:www-data /var/www/html/TestEnv
           sudo chmod -R 755 /var/www/html/TestEnv
 
-      # 4️⃣ Configure SPA routing correctly
+      # 4️⃣ Configure SPA routing
       - name: Configure SPA routing
         run: |
           NGINX_CONF="/etc/nginx/sites-available/default"
