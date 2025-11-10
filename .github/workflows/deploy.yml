@@ -1,60 +1,71 @@
-name: Deploy Angular Build to Nginx (Ubuntu)
+name: Deploy Angular Build to Nginx
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:  # Allow manual trigger
   release:
-    types: [published]
-  workflow_dispatch:  
+    types: [published]  # Also trigger on release publish
+
 jobs:
   deploy:
-    runs-on: self-hosted
-    name: Download and Deploy Angular App
+    name: Deploy Angular App to Nginx
+    runs-on: self-hosted  # or ubuntu-latest if you use SSH deployment
 
     steps:
-      # Download latest release asset (ZIP)
-      - name: Download latest Angular build
-        uses: robinraju/release-downloader@v1.11
-        with:
-          repository: ${{ github.repository }}
-          latest: true
-          fileName: angular-build.zip
-          token: ${{ secrets.GITHUB_TOKEN }}
+      # 1️⃣ Checkout repository
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      #  Unzip the build
-      - name: Unzip angular-build.zip
+      # 2️⃣ Download the latest release artifact (build.zip)
+      - name: Download latest release ZIP
         run: |
-          echo " Unzipping Angular build..."
-          mkdir -p ./unzipped_build
-          unzip -o angular-build.zip -d ./unzipped_build
-          echo " Unzip complete. Contents:"
-          ls -l ./unzipped_build
+          mkdir -p /tmp/deploy
+          echo "Downloading release asset..."
+          curl -L -o /tmp/deploy/build.zip $(curl -s https://api.github.com/repos/${{ github.repository }}/releases/latest | grep browser_download_url | cut -d '"' -f 4)
+          echo "✅ Download completed."
 
-      #  Move build to /var/www/html (Nginx directory)
-      - name: Deploy to Nginx web root
+      # 3️⃣ Unzip the build into a temp directory
+      - name: Extract build
         run: |
-          echo " Deploying files to /var/www/html..."
+          cd /tmp/deploy
+          unzip -o build.zip -d build
+          echo "✅ Build extracted:"
+          ls -l build
+
+      # 4️⃣ Deploy to Nginx root directory
+      - name: Deploy to Nginx
+        run: |
+          sudo mkdir -p /var/www/html
           sudo rm -rf /var/www/html/*
-          sudo cp -r ./unzipped_build/* /var/www/html/
-          sudo chown -R www-data:www-data /var/www/html
-          sudo chmod -R 755 /var/www/html
-          echo " Deployment complete."
+          sudo cp -r /tmp/deploy/build/* /var/www/html/
+          echo "✅ Files deployed to /var/www/html"
 
-      #   Restart Nginx
-      - name: Restart Nginx
-        run: |
-          echo " Restarting Nginx..."
-          sudo systemctl restart nginx
-          sudo systemctl status nginx --no-pager
-          echo " Nginx restarted successfully."
-
-      # Verify index.html exists
-      - name: Verify Deployment
+      # 5️⃣ Verify that index.html exists
+      - name: Verify deployment
         run: |
           if [ -f /var/www/html/index.html ]; then
-            echo " index.html found. Angular app deployed successfully!"
+            echo "✅ index.html found. Angular app deployed successfully!"
           else
-            echo " index.html missing. Deployment failed."
+            echo "❌ index.html missing. Deployment failed."
+            echo "Directory contents:"
+            ls -l /var/www/html
             exit 1
           fi
+
+      # 6️⃣ Test Nginx configuration
+      - name: Test Nginx config
+        run: |
+          sudo nginx -t
+
+      # 7️⃣ Reload Nginx to apply changes
+      - name: Reload Nginx
+        run: |
+          sudo systemctl reload nginx
+          echo "✅ Nginx reloaded successfully!"
+
+      # 8️⃣ Optional: Show deployment summary
+      - name: Deployment Summary
+        run: |
+          echo "-------------------------------------"
+          echo "🌐 Angular app deployed successfully!"
+          echo "📁 Path: /var/www/html"
+          echo "-------------------------------------"
