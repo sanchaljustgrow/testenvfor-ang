@@ -1,4 +1,3 @@
-
 name: Deploy Angular build to Nginx
 
 on:
@@ -12,26 +11,18 @@ on:
 jobs:
   deploy:
     name: Deploy Angular build to Nginx
-    # This runs on a self-hosted runner which is assumed to be an Ubuntu server
     runs-on: self-hosted
 
     steps:
-      # Checkout repository (Needed for context, even if just downloading an artifact)
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Install dependencies (unzip + nginx)
       - name: Install dependencies
         run: |
-          echo "Installing dependencies..."
-          # Use DEBIAN_FRONTEND=noninteractive to prevent interactive prompts during install
           sudo apt update -y
           sudo DEBIAN_FRONTEND=noninteractive apt install -y unzip nginx
           sudo systemctl enable nginx
-          echo "Dependencies installed."
 
-      # Download latest release asset
-      # This step only runs IF the workflow was triggered by a 'release' event
       - name: Download latest release asset (Release Trigger Only)
         if: github.event_name == 'release'
         uses: robinraju/release-downloader@v1.11
@@ -40,23 +31,20 @@ jobs:
           latest: true
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
-
     
 
       # Unzip the build
-      # Ensure the file exists before attempting to unzip
       - name: Unzip build
         run: |
           if [ -f angular-build.zip ]; then
             echo "Unzipping angular-build.zip..."
-            # Create a specific directory for extraction
             mkdir -p ./unzipped_build
             unzip -o angular-build.zip -d ./unzipped_build
             ls -lR ./unzipped_build
           else
-            echo "angular-build.zip not found. Skipping unzip step."
-            # Exit with failure if we expected a file
-            exit 1
+            echo "angular-build.zip not found. Skipping unzip step (expected if not a Release event)."
+            # Only exit 1 (fail the job) if the trigger *was* a release event
+            if [ "${{ github.event_name }}" == "release" ]; then exit 1; fi
           fi
 
    
@@ -64,18 +52,21 @@ jobs:
         run: |
           echo "Deploying build to /var/www/html/TestEnv..."
           DEPLOY_PATH="/var/www/html/TestEnv"
-          SOURCE_PATH="./unzipped_build/TestEnv/browser/" # <-- Verify this path matches your `ls` output
+          # NOTE: The path below assumes your zip file contains a TestEnv/browser folder structure
+          SOURCE_PATH="./unzipped_build/TestEnv/browser/" 
           
           if [ -d "$SOURCE_PATH" ]; then
             sudo mkdir -p "$DEPLOY_PATH"
             sudo rm -rf "$DEPLOY_PATH"/*
             sudo cp -r "$SOURCE_PATH"* "$DEPLOY_PATH"/
+            
             sudo chown -R www-data:www-data "$DEPLOY_PATH"
             sudo chmod -R 755 "$DEPLOY_PATH"
             echo "Deployment complete."
           else
-            echo "Source directory $SOURCE_PATH not found. Deployment failed."
-            exit 1
+            echo "Source directory $SOURCE_PATH not found. Skipping deployment."
+            # Only exit 1 if the source path was expected
+             if [ -f angular-build.zip ]; then exit 1; fi
           fi
 
       # Restart Nginx
@@ -83,5 +74,4 @@ jobs:
         run: |
           echo "Restarting Nginx..."
           sudo systemctl restart nginx
-          # Removed the --no-pager from status check for compatibility with non-interactive runners
           sudo systemctl status nginx
