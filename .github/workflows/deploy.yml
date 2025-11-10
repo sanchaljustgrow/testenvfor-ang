@@ -1,5 +1,5 @@
+yaml
 name: Deploy Angular build to Nginx
-
 
 on:
   push:
@@ -12,27 +12,27 @@ on:
 jobs:
   deploy:
     name: Deploy Angular build to Nginx
-  s
+    # This runs on a self-hosted runner which is assumed to be an Ubuntu server
     runs-on: self-hosted
 
     steps:
-      # Step 1: Checkout repository code (needed for context and standard practice)
+      # Checkout repository (Needed for context, even if just downloading an artifact)
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Step 2: Install dependencies (Nginx and Unzip)
+      # Install dependencies (unzip + nginx)
       - name: Install dependencies
         run: |
           echo "Installing dependencies..."
-          # Use DEBIAN_FRONTEND=noninteractive to prevent apt from hanging on interactive prompts
+          # Use DEBIAN_FRONTEND=noninteractive to prevent interactive prompts during install
           sudo apt update -y
           sudo DEBIAN_FRONTEND=noninteractive apt install -y unzip nginx
           sudo systemctl enable nginx
           echo "Dependencies installed."
 
-      # Step 3: Download latest release asset
-    
-      - name: Download latest release asset 
+      # Download latest release asset
+      # This step only runs IF the workflow was triggered by a 'release' event
+      - name: Download latest release asset (Release Trigger Only)
         if: github.event_name == 'release'
         uses: robinraju/release-downloader@v1.11
         with:
@@ -40,60 +40,55 @@ jobs:
           latest: true
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
-      
-      
 
-      # Step 4: Unzip the build
-     
+      # --- Alternative Step for Push/Dispatch triggers ---
+      # If you want to handle push/dispatch differently (e.g., build from source or download an artifact from a *previous* job)
+      # you would need an 'upload-artifact' step in a previous 'build' job and a 'download-artifact' step here.
+      # Since we don't have a prior build job defined here, we will assume the 'release' flow is the primary one.
+      # If no release is found when pushing/dispatching, the next steps will fail as designed.
+
+
+      # Unzip the build
+      # Ensure the file exists before attempting to unzip
       - name: Unzip build
         run: |
           if [ -f angular-build.zip ]; then
             echo "Unzipping angular-build.zip..."
-            # Create a clean directory for extraction
+            # Create a specific directory for extraction
             mkdir -p ./unzipped_build
             unzip -o angular-build.zip -d ./unzipped_build
-            echo "Contents of unzipped_build directory:"
             ls -lR ./unzipped_build
           else
-            echo "angular-build.zip not found. This step might be skipped if not triggered by a release."
-            # If we are on a release trigger and it's missing, fail the workflow
-            if [ "${{ github.event_name }}" == "release" ]; then
-              exit 1
-            fi
+            echo "angular-build.zip not found. Skipping unzip step."
+            # Exit with failure if we expected a file
+            exit 1
           fi
 
-      # Step 5: Deploy the extracted 'browser' folder to Nginx directory
+      # Deploy browser folder to Nginx
+      # Adjust path based on the *actual* structure inside your zip file
+      # The previous 'ls' command helps verify the exact path (e.g., ./unzipped_build/browser/ or ./unzipped_build/TestEnv/browser/)
       - name: Deploy to Nginx
         run: |
           echo "Deploying build to /var/www/html/TestEnv..."
           DEPLOY_PATH="/var/www/html/TestEnv"
-          # This path assumes your zip structure is 'angular-build.zip -> TestEnv/browser/*'
-          SOURCE_PATH="./unzipped_build/TestEnv/browser/" 
+          SOURCE_PATH="./unzipped_build/TestEnv/browser/" # <-- Verify this path matches your `ls` output
           
           if [ -d "$SOURCE_PATH" ]; then
             sudo mkdir -p "$DEPLOY_PATH"
-            # Clear previous deployment files safely
             sudo rm -rf "$DEPLOY_PATH"/*
-            # Copy all files from source to destination
             sudo cp -r "$SOURCE_PATH"* "$DEPLOY_PATH"/
-            
-            # Set correct ownership for Nginx user (www-data is standard on Ubuntu)
             sudo chown -R www-data:www-data "$DEPLOY_PATH"
-            # Set correct permissions
             sudo chmod -R 755 "$DEPLOY_PATH"
             echo "Deployment complete."
           else
-            echo "Source directory $SOURCE_PATH not found. Skipping deployment."
-            # If we successfully unzipped but the path is wrong, fail the workflow
-            if [ -d "./unzipped_build" ]; then
-                exit 1
-            fi
+            echo "Source directory $SOURCE_PATH not found. Deployment failed."
+            exit 1
           fi
 
-      # Step 6: Restart Nginx to ensure it picks up changes
+      # Restart Nginx
       - name: Restart Nginx
         run: |
           echo "Restarting Nginx..."
           sudo systemctl restart nginx
-         
+          # Removed the --no-pager from status check for compatibility with non-interactive runners
           sudo systemctl status nginx
