@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       env:
-        description: "Select environment (dev/prod/qa)"
+        description: "prod"
         required: true
         default: "dev"
   push:
