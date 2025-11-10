@@ -1,6 +1,9 @@
 name: Deploy Angular Build to Nginx
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:  # Allow manual trigger
   release:
     types: [published]  # Also trigger on release publish
