@@ -1,44 +1,80 @@
-name: Download Latest Angular Release
+name: Deploy Angular Build to Local Nginx (Ubuntu)
 
 on:
-  workflow_dispatch:  # manual trigger
   push:
     branches:
       - main
-
+  workflow_dispatch:
+  release:
+    types: [published]
 
 jobs:
-  download-latest-release:
-    runs-on:  self-hosted 
+  deploy:
+    name: Deploy Angular build to Nginx
+    runs-on: self-hosted
+
     steps:
-      # 1️⃣ Checkout repository (optional)
+      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Install dependencies
-      - name: Ensure unzip & curl are installed
-        run: sudo apt-get update && sudo apt-get install -y unzip curl jq
-
-      # 3️⃣ Get the latest release tag using GitHub API
-      - name: Get latest release tag
-        id: get_latest
+      # 2️⃣ Install dependencies (unzip + nginx)
+      - name: Install dependencies
         run: |
-          LATEST_TAG=$(curl -s https://api.github.com/repos/sanchaljustgrow/testenvfor-ang/releases/latest | jq -r .tag_name)
-          echo "Latest release tag is: $LATEST_TAG"
-          echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
+          echo "Installing dependencies..."
+          sudo apt update -y
+          sudo apt install -y unzip nginx
+          sudo systemctl enable nginx
+          echo "✅ Dependencies installed."
 
-      # 4️⃣ Download the latest release ZIP
-      - name: Download latest release ZIP
+      # 3️⃣ Download latest release asset
+      - name: Download latest release asset
+        uses: robinraju/release-downloader@v1.11
+        with:
+          repository: ${{ github.repository }}
+          latest: true
+          fileName: angular-build.zip
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # 4️⃣ Unzip the build
+      - name: Unzip build
         run: |
-          echo "Downloading angular-build.zip from release $LATEST_TAG"
-          curl -L -o angular-build.zip \
-          -H "Accept: application/octet-stream" \
-          https://github.com/sanchaljustgrow/testenvfor-ang/releases/download/$LATEST_TAG/angular-build.zip
+          echo "📦 Unzipping angular-build.zip..."
+          unzip -o angular-build.zip -d ./angular-build
+          ls -l ./angular-build
 
-      # 5️⃣ Unzip the downloaded file
-      - name: Unzip Angular Build
-        run: unzip -o angular-build.zip -d ./release_contents
+      # 5️⃣ Deploy browser folder to Nginx
+      - name: Deploy to Nginx
+        run: |
+          echo "Deploying build to /var/www/html/TestEnv..."
+          sudo mkdir -p /var/www/html/TestEnv
+          sudo rm -rf /var/www/html/TestEnv/*
+          sudo cp -r ./angular-build/TestEnv/browser/* /var/www/html/TestEnv/
+          sudo chown -R www-data:www-data /var/www/html/TestEnv
+          sudo chmod -R 755 /var/www/html/TestEnv
+          echo "✅ Deployment complete."
 
-      # 6️⃣ List contents
-      - name: List contents
-        run: ls -R ./release_contents
+      # 6️⃣ Configure Nginx for Angular SPA (safe, idempotent)
+      - name: Configure Nginx for SPA
+        run: |
+          echo "Configuring Nginx for Angular SPA..."
+          NGINX_CONF="/etc/nginx/sites-available/default"
+          # Remove existing TestEnv location block if exists
+          sudo sed -i '/location \/TestEnv\//,/}/d' $NGINX_CONF
+          # Add the correct block
+          sudo bash -c "cat >> $NGINX_CONF << 'EOF'
+location /TestEnv/ {
+    root /var/www/html;
+    index index.html;
+    try_files \$uri /TestEnv/index.html;
+}
+EOF"
+          sudo nginx -t
+          echo "✅ Nginx configured."
+
+      # 7️⃣ Restart Nginx
+      - name: Restart Nginx
+        run: |
+          echo "Restarting Nginx..."
+          sudo systemctl restart nginx
+          sudo systemctl status nginx --no-pager
