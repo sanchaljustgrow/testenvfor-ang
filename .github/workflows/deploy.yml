@@ -1,4 +1,4 @@
-name: Deploy Angular App to Nginx
+name: Download, Unzip and Deploy Angular Build to Nginx
 
 on:
   release:
@@ -11,20 +11,15 @@ on:
         default: "dev"
   push:
     branches:
-      - main  # Only trigger on main branch
+      - main
 
 jobs:
   deploy:
     runs-on: self-hosted
-    name: Deploy Angular Build to Nginx
 
     steps:
-      # 1️⃣ Checkout repository
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # 2️⃣ Download latest release asset
-      - name: Download latest release zip
+      # 1️⃣ Download release asset
+      - name: Download latest release asset
         uses: robinraju/release-downloader@v1.11
         with:
           repository: ${{ github.repository }}
@@ -32,25 +27,23 @@ jobs:
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 3️⃣ Unzip the release build
-      - name: Extract release zip
+      # 2️⃣ Unzip the release
+      - name: Unzip angular-build.zip
         run: |
-          echo "📦 Extracting release..."
-          mkdir -p /tmp/build
-          unzip -o angular-build.zip -d /tmp/build/
-          ls -l /tmp/build
+          echo "📦 Unzipping angular-build.zip..."
+          mkdir -p ./unzipped_build
+          unzip -o angular-build.zip -d ./unzipped_build
+          echo "✅ Unzip complete. Contents:"
+          ls -lR ./unzipped_build
 
-      # 4️⃣ Inject environment config
+      # 3️⃣ Inject environment config.json
       - name: Inject environment config
         run: |
           ENV=${{ github.event.inputs.env || 'dev' }}
           echo "🌍 Selected environment: $ENV"
 
           CONFIG_SOURCE="./config/config.${ENV}.json"
-          CONFIG_TARGET="/tmp/build/TestEnv/browser/assets/config.json"
-
-          # Ensure target folder exists
-          mkdir -p "$(dirname "$CONFIG_TARGET")"
+          CONFIG_TARGET="./unzipped_build/assets/config.json"
 
           if [ -f "$CONFIG_SOURCE" ]; then
             echo "✅ Using config file: $CONFIG_SOURCE"
@@ -59,36 +52,49 @@ jobs:
             echo "⚠️ Config file for $ENV not found. Using existing one."
           fi
 
-      # 5️⃣ Deploy to Nginx
-      - name: Deploy to Nginx
+      # 4️⃣ Deploy to Nginx root
+      - name: Deploy to /var/www/html
         run: |
-          ENV=${{ github.event.inputs.env || 'dev' }}
-          DEPLOY_DIR="/var/www/${ENV}"
+          echo "🚀 Deploying Angular build to /var/www/html..."
 
-          echo "📂 Deploying to $DEPLOY_DIR"
-          sudo mkdir -p $DEPLOY_DIR
-          sudo rm -rf ${DEPLOY_DIR:?}/*
-          sudo cp -r /tmp/build/TestEnv/* $DEPLOY_DIR/
-          sudo chown -R www-data:www-data $DEPLOY_DIR
-          sudo chmod -R 755 $DEPLOY_DIR
+          # Clean old files
+          sudo rm -rf /var/www/html/*
 
-      # 6️⃣ Verify deployment success
-      - name: Verify Deployment
+          # Copy everything to nginx folder
+          sudo cp -r ./unzipped_build/* /var/www/html/
+
+          # Detect common subfolder structures
+          if [ -d "/var/www/html/TestEnv" ]; then
+            echo " Detected TestEnv folder, moving contents..."
+            sudo mv /var/www/html/TestEnv/* /var/www/html/
+            sudo rm -rf /var/www/html/TestEnv
+          fi
+
+          if [ -d "/var/www/html/browser" ]; then
+            echo " Detected browser folder (Angular SSR output), moving contents..."
+            sudo mv /var/www/html/browser/* /var/www/html/
+            sudo rm -rf /var/www/html/browser
+          fi
+
+          echo "Deployment completed. List final /var/www/html:"
+          sudo ls -l /var/www/html
+
+      # 5️⃣ Verify index.html exists
+      - name: Verify deployment
         run: |
-          ENV=${{ github.event.inputs.env || 'dev' }}
-          DEPLOY_DIR="/var/www/${ENV}"
-
-          if [ -f "${DEPLOY_DIR}/browser/index.html" ]; then
+          if [ -f /var/www/html/index.html ]; then
             echo "✅ index.html found. Angular app deployed successfully!"
           else
             echo "❌ index.html missing. Deployment failed."
             echo "📂 Directory contents:"
-            sudo ls -l ${DEPLOY_DIR}
+            sudo ls -l /var/www/html
             exit 1
           fi
 
-      # 7️⃣ Reload Nginx
+      # 6️⃣ Reload Nginx
       - name: Reload Nginx
         run: |
-          sudo nginx -t && sudo systemctl reload nginx
+          echo "🔄 Reloading Nginx..."
+          sudo nginx -t
+          sudo systemctl reload nginx
           echo "🚀 Nginx reloaded successfully!"
