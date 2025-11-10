@@ -34,7 +34,7 @@ jobs:
       # 3️⃣ Unzip the release
       - name: Unzip angular-build.zip
         run: |
-          echo "📦 Extracting release..."
+          echo "📦 Unzipping angular-build.zip..."
           mkdir -p ./unzipped_build
           unzip -o angular-build.zip -d ./unzipped_build
           echo "✅ Unzip complete. Contents:"
@@ -48,16 +48,10 @@ jobs:
 
           CONFIG_SOURCE="./config/config.${ENV}.json"
 
-          # Detect actual assets folder in unzipped build
-          if [ -d "./unzipped_build/TestEnv/browser/assets" ]; then
-            ASSETS_DIR="./unzipped_build/TestEnv/browser/assets"
-          elif [ -d "./unzipped_build/TestEnv/assets" ]; then
-            ASSETS_DIR="./unzipped_build/TestEnv/assets"
-          elif [ -d "./unzipped_build/browser/assets" ]; then
-            ASSETS_DIR="./unzipped_build/browser/assets"
-          elif [ -d "./unzipped_build/assets" ]; then
-            ASSETS_DIR="./unzipped_build/assets"
-          else
+          # Detect actual assets folder
+          ASSETS_DIR=$(find ./unzipped_build -type d -name "assets" | head -n1)
+
+          if [ -z "$ASSETS_DIR" ]; then
             echo "❌ Assets folder not found in unzipped build!"
             exit 1
           fi
@@ -65,13 +59,13 @@ jobs:
           CONFIG_TARGET="$ASSETS_DIR/config.json"
 
           if [ -f "$CONFIG_SOURCE" ]; then
-            echo "✅ Using config file: $CONFIG_SOURCE"
+            echo "✅ Copying config file: $CONFIG_SOURCE -> $CONFIG_TARGET"
             cp "$CONFIG_SOURCE" "$CONFIG_TARGET"
           else
             echo "⚠️ Config file for $ENV not found. Using existing one."
           fi
 
-      # 5️⃣ Deploy to Nginx
+      # 5️⃣ Deploy to Nginx root
       - name: Deploy to /var/www/html
         run: |
           echo "🚀 Deploying Angular build to /var/www/html..."
@@ -79,19 +73,31 @@ jobs:
           # Clean old files
           sudo rm -rf /var/www/html/*
 
-          # Copy unzipped contents
-          sudo cp -r ./unzipped_build/* /var/www/html/
-
-          # Handle nested folders (TestEnv / browser)
-          if [ -d "/var/www/html/TestEnv/browser" ]; then
-            sudo mv /var/www/html/TestEnv/browser/* /var/www/html/
-            sudo rm -rf /var/www/html/TestEnv/browser
-          elif [ -d "/var/www/html/TestEnv" ]; then
-            sudo mv /var/www/html/TestEnv/* /var/www/html/
-            sudo rm -rf /var/www/html/TestEnv
+          # Detect main build folder inside unzipped folder
+          BUILD_DIR=$(find ./unzipped_build -mindepth 1 -maxdepth 1 -type d | head -n1)
+          if [ -z "$BUILD_DIR" ]; then
+            BUILD_DIR="./unzipped_build"
           fi
 
-          echo "📂 Deployment completed. Final /var/www/html contents:"
+          echo "Using build folder: $BUILD_DIR"
+
+          # Copy files to nginx folder
+          sudo cp -r $BUILD_DIR/* /var/www/html/
+
+          # Flatten common subfolders if present
+          for folder in TestEnv browser; do
+            if [ -d "/var/www/html/$folder" ]; then
+              echo "Detected $folder folder, moving contents..."
+              sudo mv /var/www/html/$folder/* /var/www/html/
+              sudo rm -rf /var/www/html/$folder
+            fi
+          done
+
+          # Set correct permissions
+          sudo chown -R www-data:www-data /var/www/html
+          sudo chmod -R 755 /var/www/html
+
+          echo "Deployment completed. Final /var/www/html contents:"
           sudo ls -l /var/www/html
 
       # 6️⃣ Verify deployment
