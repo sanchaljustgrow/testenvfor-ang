@@ -1,17 +1,13 @@
 name: Deploy Angular App to Nginx
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       env:
         description: "Select environment (dev/prod/qa)"
         required: true
         default: "dev"
-  push:
-    branches:
-      - main # Only trigger on main branch
+<480b1ab2757f5ca6624a0c66686ccf86793dd3a
 
 jobs:
   deploy:
@@ -23,14 +19,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Download latest release asset
-      - name: Download latest release zip
-        uses: robinraju/release-downloader@v1.11
+      - name: Download release artifact
         with:
-          repository: ${{ github.repository }}
-          latest: true
-          fileName: angular-build.zip
-          token: ${{ secrets.GITHUB_TOKEN }}
+          name: release-zip
+          path: ./artifact
 
       # 3️⃣ Unzip the release build
       - name: Extract release zip
@@ -56,10 +48,7 @@ jobs:
             echo "⚠️ Config file for $ENV not found. Using existing one."
           fi
 
-      # 5️⃣ Deploy to Nginx
-      - name: Deploy to Nginx
-        run: |
-          ENV=${{ github.event.inputs.env || 'dev' }}
+
           DEPLOY_DIR="/var/www/${ENV}"
 
           echo "📂 Deploying to $DEPLOY_DIR"
@@ -72,7 +61,7 @@ jobs:
       # 6️⃣ Verify deployment success
       - name: Verify Deployment
         run: |
-          ENV=${{ github.event.inputs.env || 'dev' }}
+
           DEPLOY_DIR="/var/www/${ENV}"
 
           if [ -f "${DEPLOY_DIR}/index.html" ]; then
@@ -84,7 +73,7 @@ jobs:
             exit 1
           fi
 
-      # 7️⃣ Reload Nginx
+
       - name: Reload Nginx
         run: |
           sudo nginx -t && sudo systemctl reload nginx
