@@ -47,7 +47,10 @@ jobs:
           echo "🌍 Selected environment: $ENV"
 
           CONFIG_SOURCE="./config/config.${ENV}.json"
-          CONFIG_TARGET="/tmp/build/assets/config.json"
+          CONFIG_TARGET="/tmp/build/TestEnv/browser/assets/config.json"
+
+          # Ensure target folder exists
+          mkdir -p "$(dirname "$CONFIG_TARGET")"
 
           if [ -f "$CONFIG_SOURCE" ]; then
             echo "✅ Using config file: $CONFIG_SOURCE"
@@ -65,7 +68,7 @@ jobs:
           echo "📂 Deploying to $DEPLOY_DIR"
           sudo mkdir -p $DEPLOY_DIR
           sudo rm -rf ${DEPLOY_DIR:?}/*
-          sudo cp -r /tmp/build/* $DEPLOY_DIR/
+          sudo cp -r /tmp/build/TestEnv/* $DEPLOY_DIR/
           sudo chown -R www-data:www-data $DEPLOY_DIR
           sudo chmod -R 755 $DEPLOY_DIR
 
@@ -75,7 +78,7 @@ jobs:
           ENV=${{ github.event.inputs.env || 'dev' }}
           DEPLOY_DIR="/var/www/${ENV}"
 
-          if [ -f "${DEPLOY_DIR}/index.html" ]; then
+          if [ -f "${DEPLOY_DIR}/browser/index.html" ]; then
             echo "✅ index.html found. Angular app deployed successfully!"
           else
             echo "❌ index.html missing. Deployment failed."
