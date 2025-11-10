@@ -23,7 +23,7 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt install -y unzip nginx
           sudo systemctl enable nginx
 
-      # 🔽 Always download the latest release asset (even on push/manual trigger)
+      #  Always download the latest release asset (even on push/manual trigger)
       - name: Download latest release asset
         uses: robinraju/release-downloader@v1.11
         with:
