@@ -1,32 +1,32 @@
-name: Deploy Angular build to Nginx
+name: Deploy Angular Build to Local Nginx (Ubuntu)
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   deploy:
-    name: Deploy Angular build to Nginx
+    name: Deploy Angular Build
     runs-on: self-hosted
 
     steps:
-      # 1️⃣ Checkout code
+      #  Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Install Nginx and unzip if not installed
-      - name: Install dependencies
+      #  Install unzip & Nginx if not present
+      - name: Ensure unzip and nginx installed
         run: |
           sudo apt update -y
-          sudo DEBIAN_FRONTEND=noninteractive apt install -y unzip nginx
-          sudo systemctl enable nginx
+          sudo apt install -y unzip nginx
 
-      # 3️⃣ Always download latest release zip (even on manual or push)
-      - name: Download latest release asset
+      #  Download the latest release asset (zip)
+      - name: Download latest release asset (Release Trigger Only)
+        if: github.event_name == 'release'
         uses: robinraju/release-downloader@v1.11
         with:
           repository: ${{ github.repository }}
@@ -34,68 +34,48 @@ jobs:
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 4️⃣ Unzip the Angular build
-      - name: Unzip build
+      #  If manually triggered or push, ensure angular-build.zip exists
+      - name: Check if build zip exists
         run: |
-          if [ -f angular-build.zip ]; then
-            echo "Unzipping angular-build.zip..."
-            mkdir -p ./unzipped_build
-            unzip -o angular-build.zip -d ./unzipped_build
-            ls -lR ./unzipped_build
-          else
-            echo "angular-build.zip not found! Exiting..."
+          if [ ! -f angular-build.zip ]; then
+            echo "No release zip found. Please upload angular-build.zip or trigger via release."
             exit 1
           fi
 
-      # 5️⃣ Deploy build to Nginx path
-      - name: Deploy to Nginx
+      #  Unzip build
+      - name: Unzip Angular build
         run: |
-          echo "Deploying Angular build to /var/www/html/TestEnv..."
-          DEPLOY_PATH="/var/www/html/TestEnv"
-          SOURCE_PATH="./unzipped_build/TestEnv/browser/"
+          sudo rm -rf /var/www/html/TestEnv
+          sudo mkdir -p /var/www/html/TestEnv
+          sudo unzip -o angular-build.zip -d /var/www/html/TestEnv
+          sudo chown -R www-data:www-data /var/www/html/TestEnv
+          sudo chmod -R 755 /var/www/html/TestEnv
 
-          if [ -d "$SOURCE_PATH" ]; then
-            sudo mkdir -p "$DEPLOY_PATH"
-            sudo rm -rf "$DEPLOY_PATH"/*
-            sudo cp -r "$SOURCE_PATH"* "$DEPLOY_PATH"/
-            sudo chown -R www-data:www-data "$DEPLOY_PATH"
-            sudo chmod -R 755 "$DEPLOY_PATH"
-            echo "✅ Deployment complete."
-          else
-            echo "❌ Source directory $SOURCE_PATH not found!"
-            exit 1
-          fi
-
-      # 6️⃣ Configure Nginx for Angular SPA
-      - name: Configure Nginx for Angular app
+      #  Configure Nginx for Angular app
+      - name: Configure Nginx to serve Angular app
         run: |
           echo "Configuring Nginx to serve Angular app..."
           NGINX_CONF="/etc/nginx/sites-enabled/default"
           sudo bash -c "cat > $NGINX_CONF" <<'EOF'
-server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
+          server {
+              listen 80 default_server;
+              listen [::]:80 default_server;
 
-    server_name _;
+              server_name _;
 
-    root /var/www/html/TestEnv;
-    index index.html;
+              root /var/www/html/TestEnv;
+              index index.html;
 
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    error_page 404 /index.html;
-}
-EOF
+              location / {
+                  try_files $uri $uri/ /index.html;
+              }
+          }
+          EOF
 
           sudo nginx -t
-          sudo systemctl reload nginx
-          echo "✅ Nginx configuration updated successfully."
-
-      # 7️⃣ Restart Nginx
-      - name: Restart Nginx
-        run: |
-          echo "Restarting Nginx..."
           sudo systemctl restart nginx
-          sudo systemctl status nginx --no-pager
+
+      #  Verify deployment
+      - name: Verify Deployment
+        run: |
+          curl -I http://localhost || true
