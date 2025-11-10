@@ -14,16 +14,18 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      # 1️⃣ Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2️⃣ Install Nginx and unzip if not installed
       - name: Install dependencies
         run: |
           sudo apt update -y
           sudo DEBIAN_FRONTEND=noninteractive apt install -y unzip nginx
           sudo systemctl enable nginx
 
-      #  Always download the latest release asset (even on push/manual trigger)
+      # 3️⃣ Always download latest release zip (even on manual or push)
       - name: Download latest release asset
         uses: robinraju/release-downloader@v1.11
         with:
@@ -32,6 +34,7 @@ jobs:
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # 4️⃣ Unzip the Angular build
       - name: Unzip build
         run: |
           if [ -f angular-build.zip ]; then
@@ -44,25 +47,53 @@ jobs:
             exit 1
           fi
 
+      # 5️⃣ Deploy build to Nginx path
       - name: Deploy to Nginx
         run: |
-          echo "Deploying build to /var/www/html/TestEnv..."
+          echo "Deploying Angular build to /var/www/html/TestEnv..."
           DEPLOY_PATH="/var/www/html/TestEnv"
           SOURCE_PATH="./unzipped_build/TestEnv/browser/"
-          
+
           if [ -d "$SOURCE_PATH" ]; then
             sudo mkdir -p "$DEPLOY_PATH"
             sudo rm -rf "$DEPLOY_PATH"/*
             sudo cp -r "$SOURCE_PATH"* "$DEPLOY_PATH"/
-            
             sudo chown -R www-data:www-data "$DEPLOY_PATH"
             sudo chmod -R 755 "$DEPLOY_PATH"
-            echo "Deployment complete."
+            echo "✅ Deployment complete."
           else
-            echo "Source directory $SOURCE_PATH not found. Exiting..."
+            echo "❌ Source directory $SOURCE_PATH not found!"
             exit 1
           fi
 
+      # 6️⃣ Configure Nginx for Angular SPA
+      - name: Configure Nginx for Angular app
+        run: |
+          echo "Configuring Nginx to serve Angular app..."
+          NGINX_CONF="/etc/nginx/sites-enabled/default"
+          sudo bash -c "cat > $NGINX_CONF" <<'EOF'
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+
+    server_name _;
+
+    root /var/www/html/TestEnv;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    error_page 404 /index.html;
+}
+EOF
+
+          sudo nginx -t
+          sudo systemctl reload nginx
+          echo "✅ Nginx configuration updated successfully."
+
+      # 7️⃣ Restart Nginx
       - name: Restart Nginx
         run: |
           echo "Restarting Nginx..."
