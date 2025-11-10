@@ -18,7 +18,11 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # 1️⃣ Download release asset
+      # 1️⃣ Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ Download latest release asset
       - name: Download latest release asset
         uses: robinraju/release-downloader@v1.11
         with:
@@ -27,7 +31,7 @@ jobs:
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 2️⃣ Unzip the release
+      # 3️⃣ Unzip the release
       - name: Unzip angular-build.zip
         run: |
           echo "📦 Unzipping angular-build.zip..."
@@ -36,14 +40,27 @@ jobs:
           echo "✅ Unzip complete. Contents:"
           ls -lR ./unzipped_build
 
-      # 3️⃣ Inject environment config.json
+      # 4️⃣ Inject environment config.json
       - name: Inject environment config
         run: |
           ENV=${{ github.event.inputs.env || 'dev' }}
           echo "🌍 Selected environment: $ENV"
 
           CONFIG_SOURCE="./config/config.${ENV}.json"
-          CONFIG_TARGET="./unzipped_build/assets/config.json"
+
+          # Detect actual assets folder in unzipped build
+          if [ -d "./unzipped_build/assets" ]; then
+            ASSETS_DIR="./unzipped_build/assets"
+          elif [ -d "./unzipped_build/TestEnv/assets" ]; then
+            ASSETS_DIR="./unzipped_build/TestEnv/assets"
+          elif [ -d "./unzipped_build/browser/assets" ]; then
+            ASSETS_DIR="./unzipped_build/browser/assets"
+          else
+            echo "❌ Assets folder not found in unzipped build!"
+            exit 1
+          fi
+
+          CONFIG_TARGET="$ASSETS_DIR/config.json"
 
           if [ -f "$CONFIG_SOURCE" ]; then
             echo "✅ Using config file: $CONFIG_SOURCE"
@@ -52,7 +69,7 @@ jobs:
             echo "⚠️ Config file for $ENV not found. Using existing one."
           fi
 
-      # 4️⃣ Deploy to Nginx root
+      # 5️⃣ Deploy to Nginx root
       - name: Deploy to /var/www/html
         run: |
           echo "🚀 Deploying Angular build to /var/www/html..."
@@ -63,23 +80,23 @@ jobs:
           # Copy everything to nginx folder
           sudo cp -r ./unzipped_build/* /var/www/html/
 
-          # Detect common subfolder structures
+          # Detect common subfolder structures and move contents
           if [ -d "/var/www/html/TestEnv" ]; then
-            echo " Detected TestEnv folder, moving contents..."
+            echo "Detected TestEnv folder, moving contents..."
             sudo mv /var/www/html/TestEnv/* /var/www/html/
             sudo rm -rf /var/www/html/TestEnv
           fi
 
           if [ -d "/var/www/html/browser" ]; then
-            echo " Detected browser folder (Angular SSR output), moving contents..."
+            echo "Detected browser folder (Angular SSR output), moving contents..."
             sudo mv /var/www/html/browser/* /var/www/html/
             sudo rm -rf /var/www/html/browser
           fi
 
-          echo "Deployment completed. List final /var/www/html:"
+          echo "Deployment completed. Final /var/www/html contents:"
           sudo ls -l /var/www/html
 
-      # 5️⃣ Verify index.html exists
+      # 6️⃣ Verify index.html exists
       - name: Verify deployment
         run: |
           if [ -f /var/www/html/index.html ]; then
@@ -89,9 +106,8 @@ jobs:
             echo "📂 Directory contents:"
             sudo ls -l /var/www/html
             exit 1
-          fi
 
-      # 6️⃣ Reload Nginx
+      # 7️⃣ Reload Nginx
       - name: Reload Nginx
         run: |
           echo "🔄 Reloading Nginx..."
