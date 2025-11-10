@@ -32,8 +32,6 @@ jobs:
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
     
-
-      # Unzip the build
       - name: Unzip build
         run: |
           if [ -f angular-build.zip ]; then
@@ -43,17 +41,14 @@ jobs:
             ls -lR ./unzipped_build
           else
             echo "angular-build.zip not found. Skipping unzip step (expected if not a Release event)."
-            # Only exit 1 (fail the job) if the trigger *was* a release event
             if [ "${{ github.event_name }}" == "release" ]; then exit 1; fi
           fi
 
-   
       - name: Deploy to Nginx
         run: |
           echo "Deploying build to /var/www/html/TestEnv..."
           DEPLOY_PATH="/var/www/html/TestEnv"
-          # NOTE: The path below assumes your zip file contains a TestEnv/browser folder structure
-          SOURCE_PATH="./unzipped_build/TestEnv/browser/" 
+          SOURCE_PATH="./unzipped_build/TestEnv/browser/"
           
           if [ -d "$SOURCE_PATH" ]; then
             sudo mkdir -p "$DEPLOY_PATH"
@@ -65,13 +60,11 @@ jobs:
             echo "Deployment complete."
           else
             echo "Source directory $SOURCE_PATH not found. Skipping deployment."
-            # Only exit 1 if the source path was expected
-             if [ -f angular-build.zip ]; then exit 1; fi
+            if [ -f angular-build.zip ]; then exit 1; fi
           fi
 
-      # Restart Nginx
       - name: Restart Nginx
         run: |
           echo "Restarting Nginx..."
           sudo systemctl restart nginx
-          sudo systemctl status nginx
+          sudo systemctl status nginx --no-pager
