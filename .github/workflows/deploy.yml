@@ -1,19 +1,20 @@
-name: Download and Unzip Angular Build
+name: Deploy Angular Build to Nginx
 
 on:
   push:
     branches:
       - main
-
-  workflow_dispatch:  
   release:
-    types: [published]  # Or trigger automatically when a release is published
+    types: [published]
+  workflow_dispatch:
 
 jobs:
-  download-unzip:
+  deploy:
     runs-on: self-hosted
+    name: Download, Unzip & Deploy Angular Build
 
     steps:
+      #  Download latest release zip
       - name: Download latest release asset
         uses: robinraju/release-downloader@v1.11
         with:
@@ -22,10 +23,40 @@ jobs:
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      #  Unzip build
       - name: Unzip angular-build.zip
         run: |
-          echo "📦 Unzipping angular-build.zip..."
+          echo " Unzipping angular-build.zip..."
           mkdir -p ./unzipped_build
           unzip -o angular-build.zip -d ./unzipped_build
-          echo "✅ Unzip complete. Files inside:"
+          echo " Unzip complete. Folder structure:"
           ls -lR ./unzipped_build
+
+      #  Deploy to Nginx web root
+      - name: Deploy to Nginx
+        run: |
+          echo "🚀 Deploying Angular build to Nginx..."
+          
+          # Path inside unzip (adjust if needed)
+          DEPLOY_PATH="./unzipped_build/TestEnv/browser"
+
+          # Verify folder
+          if [ ! -d "$DEPLOY_PATH" ]; then
+            echo " Error: Folder $DEPLOY_PATH not found!"
+            exit 1
+          fi
+
+          # Clean old files and copy new build
+          sudo rm -rf /var/www/html/*
+          sudo cp -r $DEPLOY_PATH/* /var/www/html/
+
+          echo " Files deployed to /var/www/html/"
+          ls -l /var/www/html
+
+      #  Restart Nginx
+      - name: Restart Nginx
+        run: |
+          echo " Restarting Nginx..."
+          sudo systemctl restart nginx
+          sudo systemctl status nginx --no-pager || true
+          echo " Deployment complete!"
