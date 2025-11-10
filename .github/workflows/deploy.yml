@@ -1,12 +1,13 @@
 name: Download, Unzip and Deploy Angular Build to Nginx
 
+# Trigger manually or on release/push
 on:
   release:
     types: [published]
   workflow_dispatch:
     inputs:
       env:
-        description: "prod"
+        description: "Deployment environment"
         required: true
         default: "dev"
   push:
@@ -18,11 +19,11 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      #  Checkout repository
+      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      #  Download latest release asset
+      # 2️⃣ Download latest release asset
       - name: Download latest release zip
         uses: robinraju/release-downloader@v1.11
         with:
@@ -31,91 +32,70 @@ jobs:
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      #  Unzip the release
+      # 3️⃣ Unzip the release
       - name: Unzip angular-build.zip
         run: |
-          echo " Unzipping angular-build.zip..."
           mkdir -p ./unzipped_build
           unzip -o angular-build.zip -d ./unzipped_build
-          echo " Unzip complete. Contents:"
+          echo "Unzip complete. Contents:"
           ls -lR ./unzipped_build
 
-      #  Inject environment config
+      # 4️⃣ Inject environment config
       - name: Inject environment config
         run: |
           ENV=${{ github.event.inputs.env || 'dev' }}
-          echo " Selected environment: $ENV"
+          echo "Selected environment: $ENV"
 
           CONFIG_SOURCE="./config/config.${ENV}.json"
 
-          # Detect actual assets folder
           ASSETS_DIR=$(find ./unzipped_build -type d -name "assets" | head -n1)
-
           if [ -z "$ASSETS_DIR" ]; then
-            echo " Assets folder not found in unzipped build!"
+            echo "Assets folder not found!"
             exit 1
           fi
 
           CONFIG_TARGET="$ASSETS_DIR/config.json"
 
           if [ -f "$CONFIG_SOURCE" ]; then
-            echo " Copying config file: $CONFIG_SOURCE -> $CONFIG_TARGET"
             cp "$CONFIG_SOURCE" "$CONFIG_TARGET"
+            echo "Config file copied for $ENV"
           else
-            echo " Config file for $ENV not found. Using existing one."
+            echo "Config file for $ENV not found, using default"
           fi
 
-      #  Deploy to Nginx root
+      # 5️⃣ Deploy to Nginx root
       - name: Deploy to /var/www/html
         run: |
-          echo " Deploying Angular build to /var/www/html..."
-
-          # Clean old files
           sudo rm -rf /var/www/html/*
-
-          # Detect main build folder inside unzipped folder
           BUILD_DIR=$(find ./unzipped_build -mindepth 1 -maxdepth 1 -type d | head -n1)
-          if [ -z "$BUILD_DIR" ]; then
-            BUILD_DIR="./unzipped_build"
-          fi
-
-          echo "Using build folder: $BUILD_DIR"
-
-          # Copy files to nginx folder
+          if [ -z "$BUILD_DIR" ]; then BUILD_DIR="./unzipped_build"; fi
           sudo cp -r $BUILD_DIR/* /var/www/html/
 
-          # Flatten common subfolders if present
+          # Flatten common folders if present
           for folder in TestEnv browser; do
             if [ -d "/var/www/html/$folder" ]; then
-              echo "Detected $folder folder, moving contents..."
               sudo mv /var/www/html/$folder/* /var/www/html/
               sudo rm -rf /var/www/html/$folder
             fi
           done
 
-          # Set correct permissions
           sudo chown -R www-data:www-data /var/www/html
           sudo chmod -R 755 /var/www/html
+          echo "Deployment completed."
 
-          echo "Deployment completed. Final /var/www/html contents:"
-          sudo ls -l /var/www/html
-
-      #  Verify deployment
+      # 6️⃣ Verify deployment
       - name: Verify deployment
         run: |
           if [ -f /var/www/html/index.html ]; then
-            echo " index.html found. Angular app deployed successfully!"
+            echo "Angular app deployed successfully!"
           else
-            echo " index.html missing. Deployment failed."
-            echo " Directory contents:"
-            sudo ls -l /var/www/html
+            echo "Deployment failed, index.html not found."
             exit 1
           fi
 
-      #  Reload Nginx
+      # 7️⃣ Reload Nginx
       - name: Reload Nginx
         run: |
-          echo " Reloading Nginx..."
           sudo nginx -t
           sudo systemctl reload nginx
-          echo " Nginx reloaded successfully!"
+          echo "Nginx reloaded successfully!"
