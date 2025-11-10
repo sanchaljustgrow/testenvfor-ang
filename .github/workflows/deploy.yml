@@ -1,4 +1,4 @@
-yaml
+
 name: Deploy Angular build to Nginx
 
 on:
