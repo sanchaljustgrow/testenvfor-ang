@@ -2,18 +2,18 @@ name: Download, Unzip and Deploy Angular Build to Nginx
 
 on:
   release:
-    types: [published] # Trigger when a new release is published
-  workflow_dispatch:    # Allow manual trigger
+    types: [published]
+  workflow_dispatch:
   push:
     branches:
-      - main            # Optional: auto-deploy on main branch
+      - main
 
 jobs:
   deploy:
     runs-on: self-hosted
 
     steps:
-      # 🧱 1️⃣ Download latest release asset
+      # 1️⃣ Download release asset
       - name: Download latest release asset
         uses: robinraju/release-downloader@v1.11
         with:
@@ -22,7 +22,7 @@ jobs:
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 📦 2️⃣ Unzip the build
+      # 2️⃣ Unzip the release
       - name: Unzip angular-build.zip
         run: |
           echo "📦 Unzipping angular-build.zip..."
@@ -31,25 +31,40 @@ jobs:
           echo "✅ Unzip complete. Contents:"
           ls -lR ./unzipped_build
 
-      # 🚀 3️⃣ Deploy build to Nginx directory
+      # 3️⃣ Deploy to Nginx root
       - name: Deploy to /var/www/html
         run: |
-          echo "🚀 Deploying Angular build to Nginx..."
+          echo "🚀 Deploying Angular build to /var/www/html..."
 
+          # Clean old files
           sudo rm -rf /var/www/html/*
+
+          # Copy everything to nginx folder
           sudo cp -r ./unzipped_build/* /var/www/html/
 
-          # If build contains subfolder (e.g., TestEnv), move contents up
+          # Detect common subfolder structures
           if [ -d "/var/www/html/TestEnv" ]; then
             echo "📁 Detected TestEnv folder, moving contents..."
             sudo mv /var/www/html/TestEnv/* /var/www/html/
             sudo rm -rf /var/www/html/TestEnv
           fi
 
-          echo "✅ Deployment completed. Listing /var/www/html:"
+          if [ -d "/var/www/html/browser" ]; then
+            echo "📁 Detected browser folder (Angular SSR output), moving contents..."
+            sudo mv /var/www/html/browser/* /var/www/html/
+            sudo rm -rf /var/www/html/browser
+          fi
+
+          if [ -d "/var/www/html/dist" ]; then
+            echo "📁 Detected dist folder, moving contents..."
+            sudo mv /var/www/html/dist/* /var/www/html/
+            sudo rm -rf /var/www/html/dist
+          fi
+
+          echo "✅ Deployment completed. Listing final /var/www/html:"
           sudo ls -l /var/www/html
 
-      # 🧩 4️⃣ Verify deployment
+      # 4️⃣ Verify index.html exists
       - name: Verify deployment
         run: |
           if [ -f /var/www/html/index.html ]; then
@@ -61,10 +76,10 @@ jobs:
             exit 1
           fi
 
-      # 🔄 5️⃣ Reload Nginx
+      # 5️⃣ Reload Nginx
       - name: Reload Nginx
         run: |
-          echo "🔄 Testing and reloading Nginx..."
+          echo "🔄 Reloading Nginx..."
           sudo nginx -t
           sudo systemctl reload nginx
           echo "✅ Nginx reloaded successfully."
