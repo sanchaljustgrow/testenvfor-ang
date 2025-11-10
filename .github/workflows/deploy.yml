@@ -7,7 +7,7 @@ on:
         description: "Select environment (dev/prod/qa)"
         required: true
         default: "dev"
-<480b1ab2757f5ca6624a0c66686ccf86793dd3a
+
 
 jobs:
   deploy:
