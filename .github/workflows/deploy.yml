@@ -41,12 +41,7 @@ jobs:
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # --- Alternative Step for Push/Dispatch triggers ---
-      # If you want to handle push/dispatch differently (e.g., build from source or download an artifact from a *previous* job)
-      # you would need an 'upload-artifact' step in a previous 'build' job and a 'download-artifact' step here.
-      # Since we don't have a prior build job defined here, we will assume the 'release' flow is the primary one.
-      # If no release is found when pushing/dispatching, the next steps will fail as designed.
-
+    
 
       # Unzip the build
       # Ensure the file exists before attempting to unzip
@@ -64,9 +59,7 @@ jobs:
             exit 1
           fi
 
-      # Deploy browser folder to Nginx
-      # Adjust path based on the *actual* structure inside your zip file
-      # The previous 'ls' command helps verify the exact path (e.g., ./unzipped_build/browser/ or ./unzipped_build/TestEnv/browser/)
+   
       - name: Deploy to Nginx
         run: |
           echo "Deploying build to /var/www/html/TestEnv..."
