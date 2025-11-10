@@ -1,4 +1,4 @@
-name: Deploy Angular Build to Nginx
+name: Deploy Angular Build to Nginx (Ubuntu)
 
 on:
   push:
@@ -6,16 +6,15 @@ on:
       - main
   release:
     types: [published]
-  workflow_dispatch:
-
+  workflow_dispatch:  
 jobs:
   deploy:
     runs-on: self-hosted
-    name: Download, Unzip & Deploy Angular Build
+    name: Download and Deploy Angular App
 
     steps:
-      #  Download latest release zip
-      - name: Download latest release asset
+      # Download latest release asset (ZIP)
+      - name: Download latest Angular build
         uses: robinraju/release-downloader@v1.11
         with:
           repository: ${{ github.repository }}
@@ -23,40 +22,39 @@ jobs:
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      #  Unzip build
+      #  Unzip the build
       - name: Unzip angular-build.zip
         run: |
-          echo " Unzipping angular-build.zip..."
+          echo " Unzipping Angular build..."
           mkdir -p ./unzipped_build
           unzip -o angular-build.zip -d ./unzipped_build
-          echo " Unzip complete. Folder structure:"
-          ls -lR ./unzipped_build
+          echo " Unzip complete. Contents:"
+          ls -l ./unzipped_build
 
-      #  Deploy to Nginx web root
-      - name: Deploy to Nginx
+      #  Move build to /var/www/html (Nginx directory)
+      - name: Deploy to Nginx web root
         run: |
-          echo "🚀 Deploying Angular build to Nginx..."
-          
-          # Path inside unzip (adjust if needed)
-          DEPLOY_PATH="./unzipped_build/TestEnv/browser"
-
-          # Verify folder
-          if [ ! -d "$DEPLOY_PATH" ]; then
-            echo " Error: Folder $DEPLOY_PATH not found!"
-            exit 1
-          fi
-
-          # Clean old files and copy new build
+          echo " Deploying files to /var/www/html..."
           sudo rm -rf /var/www/html/*
-          sudo cp -r $DEPLOY_PATH/* /var/www/html/
+          sudo cp -r ./unzipped_build/* /var/www/html/
+          sudo chown -R www-data:www-data /var/www/html
+          sudo chmod -R 755 /var/www/html
+          echo " Deployment complete."
 
-          echo " Files deployed to /var/www/html/"
-          ls -l /var/www/html
-
-      #  Restart Nginx
+      #   Restart Nginx
       - name: Restart Nginx
         run: |
           echo " Restarting Nginx..."
           sudo systemctl restart nginx
-          sudo systemctl status nginx --no-pager || true
-          echo " Deployment complete!"
+          sudo systemctl status nginx --no-pager
+          echo " Nginx restarted successfully."
+
+      # Verify index.html exists
+      - name: Verify Deployment
+        run: |
+          if [ -f /var/www/html/index.html ]; then
+            echo " index.html found. Angular app deployed successfully!"
+          else
+            echo " index.html missing. Deployment failed."
+            exit 1
+          fi
