@@ -23,15 +23,15 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt install -y unzip nginx
           sudo systemctl enable nginx
 
-      - name: Download latest release asset (Release Trigger Only)
-        if: github.event_name == 'release'
+      # 🔽 Always download the latest release asset (even on push/manual trigger)
+      - name: Download latest release asset
         uses: robinraju/release-downloader@v1.11
         with:
           repository: ${{ github.repository }}
           latest: true
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
-    
+
       - name: Unzip build
         run: |
           if [ -f angular-build.zip ]; then
@@ -40,8 +40,8 @@ jobs:
             unzip -o angular-build.zip -d ./unzipped_build
             ls -lR ./unzipped_build
           else
-            echo "angular-build.zip not found. Skipping unzip step (expected if not a Release event)."
-            if [ "${{ github.event_name }}" == "release" ]; then exit 1; fi
+            echo "angular-build.zip not found! Exiting..."
+            exit 1
           fi
 
       - name: Deploy to Nginx
@@ -59,8 +59,8 @@ jobs:
             sudo chmod -R 755 "$DEPLOY_PATH"
             echo "Deployment complete."
           else
-            echo "Source directory $SOURCE_PATH not found. Skipping deployment."
-            if [ -f angular-build.zip ]; then exit 1; fi
+            echo "Source directory $SOURCE_PATH not found. Exiting..."
+            exit 1
           fi
 
       - name: Restart Nginx
