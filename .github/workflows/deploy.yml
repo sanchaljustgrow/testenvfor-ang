@@ -1,12 +1,9 @@
 name: Deploy Angular Build to Local Nginx (Ubuntu)
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:   # Manual trigger
   release:
-    types: [published]
-  workflow_dispatch:
+    types: [published] # Trigger automatically on release publish
 
 jobs:
   deploy:
@@ -14,18 +11,14 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      #  Checkout repo
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      #  Install unzip & Nginx if not present
-      - name: Ensure unzip and nginx installed
+      # 1️⃣ Update and install dependencies
+      - name: Install dependencies
         run: |
           sudo apt update -y
           sudo apt install -y unzip nginx
 
-      #  Download the latest release asset (zip)
-      - name: Download latest release asset (Release Trigger Only)
+      # 2️⃣ Download latest release asset
+      - name: Download latest release asset
         if: github.event_name == 'release'
         uses: robinraju/release-downloader@v1.11
         with:
@@ -34,48 +27,32 @@ jobs:
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      #  If manually triggered or push, ensure angular-build.zip exists
+      # 3️⃣ Check for the build zip
       - name: Check if build zip exists
         run: |
           if [ ! -f angular-build.zip ]; then
-            echo "No release zip found. Please upload angular-build.zip or trigger via release."
+            echo "❌ No release zip found. Please upload angular-build.zip or trigger via release."
             exit 1
           fi
 
-      #  Unzip build
-      - name: Unzip Angular build
+      # 4️⃣ Unzip and deploy Angular build
+      - name: Unzip and deploy
         run: |
-          sudo rm -rf /var/www/html/TestEnv
-          sudo mkdir -p /var/www/html/TestEnv
-          sudo unzip -o angular-build.zip -d /var/www/html/TestEnv
-          sudo chown -R www-data:www-data /var/www/html/TestEnv
-          sudo chmod -R 755 /var/www/html/TestEnv
+          echo "📦 Unzipping angular-build.zip..."
+          mkdir -p ./unzipped_build
+          unzip -o angular-build.zip -d ./unzipped_build
+          echo "📂 Files after unzip:"
+          ls -lR ./unzipped_build
 
-      #  Configure Nginx for Angular app
-      - name: Configure Nginx to serve Angular app
+          # echo "🚀 Deploying to /var/www/html/TestEnv..."
+          # sudo mkdir -p /var/www/html/TestEnv
+          # sudo cp -r ./unzipped_build/* /var/www/html/TestEnv/
+
+    
+
+      # 6️⃣ Restart Nginx
+      - name: Restart Nginx
         run: |
-          echo "Configuring Nginx to serve Angular app..."
-          NGINX_CONF="/etc/nginx/sites-enabled/default"
-          sudo bash -c "cat > $NGINX_CONF" <<'EOF'
-          server {
-              listen 80 default_server;
-              listen [::]:80 default_server;
-
-              server_name _;
-
-              root /var/www/html/TestEnv;
-              index index.html;
-
-              location / {
-                  try_files $uri $uri/ /index.html;
-              }
-          }
-          EOF
-
-          sudo nginx -t
+          echo "🔄 Restarting Nginx..."
           sudo systemctl restart nginx
-
-      #  Verify deployment
-      - name: Verify Deployment
-        run: |
-          curl -I http://localhost || true
+          sudo systemctl status nginx --no-pager
