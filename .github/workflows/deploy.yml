@@ -1,25 +1,20 @@
-name: Deploy Angular Build to Local Nginx (Ubuntu)
+name: Download and Unzip Angular Build
 
 on:
-  workflow_dispatch:   # Manual trigger
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:  
   release:
-    types: [published] # Trigger automatically on release publish
+    types: [published]  # Or trigger automatically when a release is published
 
 jobs:
-  deploy:
-    name: Deploy Angular Build
+  download-unzip:
     runs-on: self-hosted
 
     steps:
-      # 1️⃣ Update and install dependencies
-      - name: Install dependencies
-        run: |
-          sudo apt update -y
-          sudo apt install -y unzip nginx
-
-      # 2️⃣ Download latest release asset
       - name: Download latest release asset
-        if: github.event_name == 'release'
         uses: robinraju/release-downloader@v1.11
         with:
           repository: ${{ github.repository }}
@@ -27,32 +22,10 @@ jobs:
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 3️⃣ Check for the build zip
-      - name: Check if build zip exists
-        run: |
-          if [ ! -f angular-build.zip ]; then
-            echo "❌ No release zip found. Please upload angular-build.zip or trigger via release."
-            exit 1
-          fi
-
-      # 4️⃣ Unzip and deploy Angular build
-      - name: Unzip and deploy
+      - name: Unzip angular-build.zip
         run: |
           echo "📦 Unzipping angular-build.zip..."
           mkdir -p ./unzipped_build
           unzip -o angular-build.zip -d ./unzipped_build
-          echo "📂 Files after unzip:"
+          echo "✅ Unzip complete. Files inside:"
           ls -lR ./unzipped_build
-
-          # echo "🚀 Deploying to /var/www/html/TestEnv..."
-          # sudo mkdir -p /var/www/html/TestEnv
-          # sudo cp -r ./unzipped_build/* /var/www/html/TestEnv/
-
-    
-
-      # 6️⃣ Restart Nginx
-      - name: Restart Nginx
-        run: |
-          echo "🔄 Restarting Nginx..."
-          sudo systemctl restart nginx
-          sudo systemctl status nginx --no-pager
