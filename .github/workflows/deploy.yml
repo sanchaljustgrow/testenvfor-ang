@@ -18,11 +18,11 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # 1️⃣ Checkout repository
+      #  Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Download latest release asset
+      #  Download latest release asset
       - name: Download latest release zip
         uses: robinraju/release-downloader@v1.11
         with:
@@ -31,20 +31,20 @@ jobs:
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 3️⃣ Unzip the release
+      #  Unzip the release
       - name: Unzip angular-build.zip
         run: |
-          echo "📦 Unzipping angular-build.zip..."
+          echo " Unzipping angular-build.zip..."
           mkdir -p ./unzipped_build
           unzip -o angular-build.zip -d ./unzipped_build
-          echo "✅ Unzip complete. Contents:"
+          echo " Unzip complete. Contents:"
           ls -lR ./unzipped_build
 
-      # 4️⃣ Inject environment config
+      #  Inject environment config
       - name: Inject environment config
         run: |
           ENV=${{ github.event.inputs.env || 'dev' }}
-          echo "🌍 Selected environment: $ENV"
+          echo " Selected environment: $ENV"
 
           CONFIG_SOURCE="./config/config.${ENV}.json"
 
@@ -52,23 +52,23 @@ jobs:
           ASSETS_DIR=$(find ./unzipped_build -type d -name "assets" | head -n1)
 
           if [ -z "$ASSETS_DIR" ]; then
-            echo "❌ Assets folder not found in unzipped build!"
+            echo " Assets folder not found in unzipped build!"
             exit 1
           fi
 
           CONFIG_TARGET="$ASSETS_DIR/config.json"
 
           if [ -f "$CONFIG_SOURCE" ]; then
-            echo "✅ Copying config file: $CONFIG_SOURCE -> $CONFIG_TARGET"
+            echo " Copying config file: $CONFIG_SOURCE -> $CONFIG_TARGET"
             cp "$CONFIG_SOURCE" "$CONFIG_TARGET"
           else
-            echo "⚠️ Config file for $ENV not found. Using existing one."
+            echo " Config file for $ENV not found. Using existing one."
           fi
 
-      # 5️⃣ Deploy to Nginx root
+      #  Deploy to Nginx root
       - name: Deploy to /var/www/html
         run: |
-          echo "🚀 Deploying Angular build to /var/www/html..."
+          echo " Deploying Angular build to /var/www/html..."
 
           # Clean old files
           sudo rm -rf /var/www/html/*
@@ -100,22 +100,22 @@ jobs:
           echo "Deployment completed. Final /var/www/html contents:"
           sudo ls -l /var/www/html
 
-      # 6️⃣ Verify deployment
+      #  Verify deployment
       - name: Verify deployment
         run: |
           if [ -f /var/www/html/index.html ]; then
-            echo "✅ index.html found. Angular app deployed successfully!"
+            echo " index.html found. Angular app deployed successfully!"
           else
-            echo "❌ index.html missing. Deployment failed."
-            echo "📂 Directory contents:"
+            echo " index.html missing. Deployment failed."
+            echo " Directory contents:"
             sudo ls -l /var/www/html
             exit 1
           fi
 
-      # 7️⃣ Reload Nginx
+      #  Reload Nginx
       - name: Reload Nginx
         run: |
-          echo "🔄 Reloading Nginx..."
+          echo " Reloading Nginx..."
           sudo nginx -t
           sudo systemctl reload nginx
-          echo "🚀 Nginx reloaded successfully!"
+          echo " Nginx reloaded successfully!"
