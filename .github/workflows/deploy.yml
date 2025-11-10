@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v4
 
       # 2️⃣ Download latest release asset
-      - name: Download latest release asset
+      - name: Download latest release zip
         uses: robinraju/release-downloader@v1.11
         with:
           repository: ${{ github.repository }}
@@ -40,7 +40,7 @@ jobs:
           echo "✅ Unzip complete. Contents:"
           ls -lR ./unzipped_build
 
-      # 4️⃣ Inject environment config.json
+      # 4️⃣ Inject environment config
       - name: Inject environment config
         run: |
           ENV=${{ github.event.inputs.env || 'dev' }}
@@ -48,7 +48,7 @@ jobs:
 
           CONFIG_SOURCE="./config/config.${ENV}.json"
 
-          # Detect actual assets folder in unzipped build
+          # Detect the actual assets folder inside the unzipped build
           if [ -d "./unzipped_build/assets" ]; then
             ASSETS_DIR="./unzipped_build/assets"
           elif [ -d "./unzipped_build/TestEnv/assets" ]; then
@@ -69,31 +69,25 @@ jobs:
             echo "⚠️ Config file for $ENV not found. Using existing one."
           fi
 
-      # 5️⃣ Deploy to Nginx root
+      # 5️⃣ Deploy to Nginx
       - name: Deploy to /var/www/html
         run: |
           echo "🚀 Deploying Angular build to /var/www/html..."
-
-          # Clean old files
           sudo rm -rf /var/www/html/*
-
-          # Copy everything to nginx folder
-          sudo cp -r ./unzipped_build/* /var/www/html/
-
-          # Detect common subfolder structures and move contents
-          if [ -d "/var/www/html/TestEnv" ]; then
-            echo "Detected TestEnv folder, moving contents..."
-            sudo mv /var/www/html/TestEnv/* /var/www/html/
-            sudo rm -rf /var/www/html/TestEnv
+          
+          # Detect if the unzipped build has a subfolder (TestEnv/browser) and copy correctly
+          if [ -d "./unzipped_build/TestEnv" ]; then
+            sudo cp -r ./unzipped_build/TestEnv/* /var/www/html/
+          elif [ -d "./unzipped_build/browser" ]; then
+            sudo cp -r ./unzipped_build/browser/* /var/www/html/
+          else
+            sudo cp -r ./unzipped_build/* /var/www/html/
           fi
 
-          if [ -d "/var/www/html/browser" ]; then
-            echo "Detected browser folder (Angular SSR output), moving contents..."
-            sudo mv /var/www/html/browser/* /var/www/html/
-            sudo rm -rf /var/www/html/browser
-          fi
+          sudo chown -R www-data:www-data /var/www/html
+          sudo chmod -R 755 /var/www/html
 
-          echo "Deployment completed. Final /var/www/html contents:"
+          echo "Deployment completed. List final /var/www/html:"
           sudo ls -l /var/www/html
 
       # 6️⃣ Verify index.html exists
@@ -106,6 +100,7 @@ jobs:
             echo "📂 Directory contents:"
             sudo ls -l /var/www/html
             exit 1
+          fi
 
       # 7️⃣ Reload Nginx
       - name: Reload Nginx
