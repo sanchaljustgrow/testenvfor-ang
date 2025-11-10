@@ -1,74 +1,70 @@
-name: Deploy Angular Build to Nginx
+name: Download, Unzip and Deploy Angular Build to Nginx
 
 on:
+  release:
+    types: [published] # Trigger when a new release is published
+  workflow_dispatch:    # Allow manual trigger
   push:
     branches:
-      - main
-  workflow_dispatch:  # Allow manual trigger
-  release:
-    types: [published]  # Also trigger on release publish
+      - main            # Optional: auto-deploy on main branch
 
 jobs:
   deploy:
-    name: Deploy Angular App to Nginx
-    runs-on: self-hosted  # or ubuntu-latest if you use SSH deployment
+    runs-on: self-hosted
 
     steps:
-      # 1️⃣ Checkout repository
-      - name: Checkout code
-        uses: actions/checkout@v4
+      # 🧱 1️⃣ Download latest release asset
+      - name: Download latest release asset
+        uses: robinraju/release-downloader@v1.11
+        with:
+          repository: ${{ github.repository }}
+          latest: true
+          fileName: angular-build.zip
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 2️⃣ Download the latest release artifact (build.zip)
-      - name: Download latest release ZIP
+      # 📦 2️⃣ Unzip the build
+      - name: Unzip angular-build.zip
         run: |
-          mkdir -p /tmp/deploy
-          echo "Downloading release asset..."
-          curl -L -o /tmp/deploy/build.zip $(curl -s https://api.github.com/repos/${{ github.repository }}/releases/latest | grep browser_download_url | cut -d '"' -f 4)
-          echo "✅ Download completed."
+          echo "📦 Unzipping angular-build.zip..."
+          mkdir -p ./unzipped_build
+          unzip -o angular-build.zip -d ./unzipped_build
+          echo "✅ Unzip complete. Contents:"
+          ls -lR ./unzipped_build
 
-      # 3️⃣ Unzip the build into a temp directory
-      - name: Extract build
+      # 🚀 3️⃣ Deploy build to Nginx directory
+      - name: Deploy to /var/www/html
         run: |
-          cd /tmp/deploy
-          unzip -o build.zip -d build
-          echo "✅ Build extracted:"
-          ls -l build
+          echo "🚀 Deploying Angular build to Nginx..."
 
-      # 4️⃣ Deploy to Nginx root directory
-      - name: Deploy to Nginx
-        run: |
-          sudo mkdir -p /var/www/html
           sudo rm -rf /var/www/html/*
-          sudo cp -r /tmp/deploy/build/* /var/www/html/
-          echo "✅ Files deployed to /var/www/html"
+          sudo cp -r ./unzipped_build/* /var/www/html/
 
-      # 5️⃣ Verify that index.html exists
+          # If build contains subfolder (e.g., TestEnv), move contents up
+          if [ -d "/var/www/html/TestEnv" ]; then
+            echo "📁 Detected TestEnv folder, moving contents..."
+            sudo mv /var/www/html/TestEnv/* /var/www/html/
+            sudo rm -rf /var/www/html/TestEnv
+          fi
+
+          echo "✅ Deployment completed. Listing /var/www/html:"
+          sudo ls -l /var/www/html
+
+      # 🧩 4️⃣ Verify deployment
       - name: Verify deployment
         run: |
           if [ -f /var/www/html/index.html ]; then
             echo "✅ index.html found. Angular app deployed successfully!"
           else
             echo "❌ index.html missing. Deployment failed."
-            echo "Directory contents:"
-            ls -l /var/www/html
+            echo "📂 Directory contents:"
+            sudo ls -l /var/www/html
             exit 1
           fi
 
-      # 6️⃣ Test Nginx configuration
-      - name: Test Nginx config
-        run: |
-          sudo nginx -t
-
-      # 7️⃣ Reload Nginx to apply changes
+      # 🔄 5️⃣ Reload Nginx
       - name: Reload Nginx
         run: |
+          echo "🔄 Testing and reloading Nginx..."
+          sudo nginx -t
           sudo systemctl reload nginx
-          echo "✅ Nginx reloaded successfully!"
-
-      # 8️⃣ Optional: Show deployment summary
-      - name: Deployment Summary
-        run: |
-          echo "-------------------------------------"
-          echo "🌐 Angular app deployed successfully!"
-          echo "📁 Path: /var/www/html"
-          echo "-------------------------------------"
+          echo "✅ Nginx reloaded successfully."
