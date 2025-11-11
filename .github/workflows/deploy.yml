@@ -9,7 +9,7 @@ on:
       env:
         description: "Deployment environment"
         required: true
-        default: "dev"
+        default: "prod"
   push:
     branches:
       - main
