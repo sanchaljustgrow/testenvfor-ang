@@ -19,11 +19,11 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # 1️⃣ Checkout repository
+      #  Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Download latest release asset
+      #  Download latest release asset
       - name: Download latest release zip
         uses: robinraju/release-downloader@v1.11
         with:
@@ -32,7 +32,7 @@ jobs:
           fileName: angular-build.zip
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 3️⃣ Unzip the release
+      #  Unzip the release
       - name: Unzip angular-build.zip
         run: |
           mkdir -p ./unzipped_build
@@ -40,7 +40,7 @@ jobs:
           echo "Unzip complete. Contents:"
           ls -lR ./unzipped_build
 
-      # 4️⃣ Inject environment config
+      #  Inject environment config
       - name: Inject environment config
         run: |
           ENV=${{ github.event.inputs.env || 'dev' }}
@@ -63,7 +63,7 @@ jobs:
             echo "Config file for $ENV not found, using default"
           fi
 
-      # 5️⃣ Deploy to Nginx root
+      #  Deploy to Nginx root
       - name: Deploy to /var/www/html
         run: |
           sudo rm -rf /var/www/html/*
@@ -83,7 +83,7 @@ jobs:
           sudo chmod -R 755 /var/www/html
           echo "Deployment completed."
 
-      # 6️⃣ Verify deployment
+      #  Verify deployment
       - name: Verify deployment
         run: |
           if [ -f /var/www/html/index.html ]; then
@@ -93,7 +93,7 @@ jobs:
             exit 1
           fi
 
-      # 7️⃣ Reload Nginx
+      #  Reload Nginx
       - name: Reload Nginx
         run: |
           sudo nginx -t
