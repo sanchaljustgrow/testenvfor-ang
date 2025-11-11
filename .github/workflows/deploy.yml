@@ -43,7 +43,7 @@ jobs:
       #  Inject environment config
       - name: Inject environment config
         run: |
-          ENV=${{ github.event.inputs.env || 'dev' }}
+          ENV=${{ github.event.inputs.env  }}
           echo "Selected environment: $ENV"
 
           CONFIG_SOURCE="./config/config.${ENV}.json"
